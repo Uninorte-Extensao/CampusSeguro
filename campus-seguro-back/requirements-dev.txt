@@ -1,0 +1,2 @@
+# Dependências usadas apenas em desenvolvimento / CI (não vão para a imagem de produção)
+pytest~=8.3
