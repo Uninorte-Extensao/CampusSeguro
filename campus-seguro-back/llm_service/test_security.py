@@ -1,5 +1,5 @@
-from services.llm_service.personal_information import anonimizar_texto
-from services.llm_service.security import SecurityService
+from llm_service.personal_information import anonimizar_texto
+from llm_service.security import SecurityService
 
 
 
