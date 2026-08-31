@@ -13,6 +13,27 @@ export const appTheme = {
   },
 };
 
+// Paleta usada pelo hook useThemeColor e pelos componentes themed-*.
+// Mantém a mesma linguagem visual do appTheme (tema escuro do app).
+export const Colors = {
+  light: {
+    text: "#0B1020",
+    background: "#f8fafc",
+    tint: "#2563eb",
+    icon: "#4b5563",
+    tabIconDefault: "#9ca3af",
+    tabIconSelected: "#2563eb",
+  },
+  dark: {
+    text: "#f8fafc",
+    background: "#0B1020",
+    tint: "#2563eb",
+    icon: "#9ca3af",
+    tabIconDefault: "#6b7280",
+    tabIconSelected: "#2563eb",
+  },
+};
+
 export const tokens = {
   spacing: {
     xs: 8,

@@ -10,6 +10,7 @@ on:
     paths:
       - 'campus-seguro-front/**'
       - '.github/workflows/frontend-ci.yml'
+  workflow_dispatch:
 
 # Cancela execuções antigas do mesmo branch/PR quando um novo push chega
 concurrency:
