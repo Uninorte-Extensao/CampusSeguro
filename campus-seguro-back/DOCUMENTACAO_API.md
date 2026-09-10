@@ -1,6 +1,10 @@
 # 🛡️ Documentação Técnica e Manual de Execução - Back-end Campus Seguro
 
-Este documento contém todas as instruções necessárias para configurar, executar e testar o back-end do projeto Campus Seguro, bem como o detalhe da arquitetura de dados (Base de Dados) e a listagem de endpoints. A API foi desenvolvida em Python utilizando o framework FastAPI e a biblioteca SQLModel (com base de dados SQLite para o MVP).
+Este documento contém todas as instruções necessárias para configurar, executar e testar o back-end do projeto Campus Seguro, bem como o detalhe da arquitetura de dados e a listagem de endpoints. A API foi desenvolvida em Python utilizando FastAPI e SQLModel, com PostgreSQL hospedado no Supabase.
+
+As regras para contribuir com código, criar forks, abrir Pull Requests e
+vincular tarefas ao Trello estão em
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -11,7 +15,8 @@ Para que qualquer membro da equipa consiga correr a API no seu próprio computad
 ### Pré-requisitos
 
 - Ter o Python 3.8+ instalado no computador.
-- Ter os ficheiros `main.py` e `models.py` na mesma pasta.
+- Ter os ficheiros `main.py`, `models.py`, `schemas.py` e `bucket.py` na mesma pasta.
+- Ter um projeto ativo no Supabase e a URI PostgreSQL de conexão.
 
 ### Passo 1: Instalar as dependências
 
@@ -29,7 +34,28 @@ pip install fastapi uvicorn sqlmodel PyJWT "python-multipart"
 
 > Nota: o ficheiro `requirements.txt` contém todas as dependências necessárias. A biblioteca `python-multipart` é necessária para o formulário de Login do OAuth2, e `PyJWT` é essencial para a geração e validação de tokens JWT.
 
-### Passo 2: Iniciar o Servidor
+### Passo 2: Configurar as variáveis de ambiente
+
+Crie um ficheiro `.env` na raiz do projeto. Nunca publique este ficheiro nem partilhe a senha do banco:
+
+```env
+SECRET_KEY=gere-uma-chave-aleatoria-e-segura
+DATABASE_URL=postgresql://postgres.PROJECT_REF:SENHA@HOST_DO_POOLER:6543/postgres?sslmode=require
+```
+
+Copie a `DATABASE_URL` diretamente no Supabase em **Connect → Connection string → URI**. Não use a URL HTTPS do projeto (`https://PROJECT_REF.supabase.co`) como `DATABASE_URL`; essa é a URL da API HTTP do Supabase, não a conexão PostgreSQL.
+
+O projeto também pode usar variáveis opcionais para os serviços de IA e armazenamento. Consulte o ficheiro `.env` local e mantenha os respectivos segredos apenas no ambiente de execução.
+
+Para confirmar a configuração sem exibir a senha:
+
+```powershell
+.\venv\Scripts\python.exe -c "from dotenv import dotenv_values; from urllib.parse import urlsplit; u=urlsplit(dotenv_values('.env')['DATABASE_URL']); print(u.scheme, u.hostname, u.port, u.username)"
+```
+
+O resultado deve indicar uma URI `postgresql`, o host do pooler do Supabase e a porta indicada pela string copiada do painel.
+
+### Passo 3: Iniciar o Servidor
 
 Na mesma pasta, execute o comando:
 
@@ -37,14 +63,16 @@ Na mesma pasta, execute o comando:
 uvicorn main:app --reload
 ```
 
-A API estará online! O ficheiro da base de dados `campus_seguro.db` será criado automaticamente na pasta.
+A API estará online. No primeiro arranque, as tabelas do modelo são criadas/verificadas no PostgreSQL configurado em `DATABASE_URL`.
 
-### Passo 3: Aceder à Interface de Testes (Swagger)
+### Passo 4: Aceder à Interface de Testes (Swagger)
 
 Abra o navegador e aceda a:
 
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
+
+Durante o desenvolvimento local, `http://localhost:8000` é esperado. Em produção, publique a API atrás de HTTPS.
 
 ---
 
@@ -244,8 +272,8 @@ username=joao@email.com&password=senha_forte_123
   - Enums: `TipoPerfil`, `StatusOcorrencia`, `TipoMidia`
 
 - **main.py**: Ficheiro principal com:
-  - Configuração do FastAPI e SQLite
-  - Inicialização do motor de banco de dados
+  - Configuração do FastAPI e PostgreSQL/Supabase
+  - Inicialização do motor de banco de dados e criação/verificação das tabelas
   - Implementação do OAuth2 com JWT
   - Todos os routers (endpoints) da API
   - Lógica de RBAC (Controlo de Acesso Baseado em Perfis)
@@ -256,7 +284,7 @@ username=joao@email.com&password=senha_forte_123
 
 - **JWT (JSON Web Tokens)**: Tokens JWT reais são gerados com validade de 24 horas
 - **OAuth2**: Implementação OAuth2 com bearer tokens
-- **Hashing de Senhas**: No MVP, as senhas utilizam um sistema de hash simplificado (`hash_falso_<senha>`). Para produção, **utilizar bibliotecas como `bcrypt` ou `passlib`**
+- **Hashing de Senhas**: As senhas são protegidas com `bcrypt` através do `passlib`; nunca são armazenadas em texto puro
 - **RBAC**: O sistema valida o tipo de perfil (`TipoPerfil`) para determinar permissões:
   - `ALUNO` / `COLABORADOR`: Podem criar ocorrências, ver apenas as suas
   - `SEGURANCA`: Acesso total para atender ocorrências
@@ -338,16 +366,15 @@ ABERTO → EM_ATENDIMENTO → RESOLVIDO
 
 | Variável | Valor | Descrição |
 |---|---|---|
-| `SECRET_KEY` | `chave-super-secreta-campus-seguro-mvp` | Chave para assinar JWT (⚠️ Mudar em produção) |
+| `SECRET_KEY` | Definida no `.env` | Chave aleatória para assinar JWT; nunca publicar |
 | `ALGORITHM` | `HS256` | Algoritmo de encriptação JWT |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` (24h) | Tempo de expiração do token |
-| `sqlite_url` | `sqlite:///campus_seguro.db` | Base de dados SQLite |
+| `DATABASE_URL` | URI `postgresql://...` do Supabase | Conexão PostgreSQL com `sslmode=require` |
 
 ---
 
 ## 🎯 7. Plano de Melhorias Futuras
 
-- Implementar hash seguro de senhas (`bcrypt` / `passlib`)
 - Adicionar campo `prioridade` na tabela `Ocorrencia`
 - Implementar filtros avançados (por data, prioridade, status)
 - Autenticação multi-factor (MFA)
@@ -472,9 +499,23 @@ curl -X POST "http://localhost:8000/ocorrencias/123e4567-e89b-12d3-a456-42661417
 ## 📝 9. Notas Importantes
 
 - **Expiração do Token**: Os tokens JWT expiram após 24 horas. É necessário fazer login novamente.
-- **Ambiente de Produção**: 
-  - ⚠️ Mudar `SECRET_KEY` para uma chave segura e aleatória
-  - ⚠️ Implementar hash robusto de senhas (`bcrypt`)
-  - ⚠️ Usar HTTPS em vez de HTTP
-  - ⚠️ Implementar CORS adequadamente
-- **Base de Dados**: O SQLite é adquado para MVP, mas considerar PostgreSQL para produção
+- **Hash de senhas**: A API já utiliza `bcrypt` através do `passlib`; as senhas não devem ser armazenadas em texto puro.
+- **Base de dados**: A aplicação está configurada para PostgreSQL no Supabase. A `DATABASE_URL` deve ser uma URI `postgresql://` com `sslmode=require`.
+- **Segredos**: `SECRET_KEY`, senha do banco e credenciais de serviços externos devem ser fortes, mantidos no `.env`/secret manager e excluídos do controlo de versão.
+- **HTTPS**: `http://localhost` é aceitável apenas no desenvolvimento local. Em produção, use HTTPS no domínio público da API e configure o certificado no proxy ou serviço de hospedagem.
+- **CORS**: Antes de publicar um frontend em domínio diferente, configure o CORS da API para permitir somente as origens oficiais. Não use `allow_origins=["*"]` em produção.
+- **Supabase Data API/RLS**: Se as tabelas forem acessadas diretamente pelo Data API do Supabase, habilite RLS e crie políticas adequadas. Quando a aplicação acessa o banco exclusivamente via SQLAlchemy no backend, mantenha a `DATABASE_URL` e a senha apenas no servidor.
+- **Validação concluída**: A conexão PostgreSQL foi validada com sucesso e o arranque da aplicação conseguiu criar/verificar as tabelas.
+
+### Checklist de publicação
+
+- [x] Dependências instaladas.
+- [x] `DATABASE_URL` configurada com a URI PostgreSQL do Supabase.
+- [x] Conexão com o banco validada.
+- [x] Tabelas criadas/verificadas no arranque.
+- [x] JWT com expiração de 24 horas.
+- [x] Senhas protegidas com `bcrypt`.
+- [ ] Substituir valores de desenvolvimento por segredos do ambiente de produção.
+- [ ] Publicar a API atrás de HTTPS.
+- [ ] Configurar CORS com as origens reais do frontend.
+- [ ] Executar os testes funcionais dos endpoints em ambiente de homologação.

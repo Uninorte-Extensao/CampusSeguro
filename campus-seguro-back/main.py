@@ -15,14 +15,26 @@ from schemas import (Token, UsuarioCreate, UsuarioResponse, OcorrenciaCreate, Oc
 from fastapi import File, UploadFile, Form
 from bucket import deletar_arquivo_bucket, fazer_upload_arquivo
 from fastapi.middleware.cors import CORSMiddleware
+from passlib.context import CryptContext
+from dotenv import load_dotenv
 
-URL_LLAMA_API = os.getenv("URL_LLAMA_API")
+load_dotenv()
 
 # --- 1. CONFIGURAÇÃO DO BANCO DE DADOS ---
-sqlite_file_name = "campus_seguro.db"
-sqlite_url = f"sqlite:///{sqlite_file_name}"
+database_url = os.getenv("DATABASE_URL")
+if not database_url:
+    raise RuntimeError("DATABASE_URL não foi definida no arquivo .env")
 
-engine = create_engine(sqlite_url, echo=False)
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+if not database_url.startswith(("postgresql://", "postgresql+psycopg2://")):
+    raise RuntimeError(
+        "DATABASE_URL deve ser uma URI PostgreSQL, começando com "
+        "'postgresql://' ou 'postgresql+psycopg2://'"
+    )
+
+engine = create_engine(database_url, echo=False)
 
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
@@ -40,7 +52,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        origin.strip()
+        for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+        if origin.strip()
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,9 +70,12 @@ def on_startup():
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 # Configurações do JWT
-SECRET_KEY = "chave-super-secreta-campus-seguro-mvp"
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY não foi definida no arquivo .env")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 24 horas
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # --- FUNÇÕES DE SEGURANÇA (JWT E RBAC) ---
 def criar_token_acesso(data: dict):
@@ -119,9 +138,7 @@ def login_para_obter_token(
         )
     ).first()
     
-    senha_hasheada = f"hash_falso_{form_data.password}"
-    
-    if not usuario or usuario.senha_hash != senha_hasheada:
+    if not usuario or not usuario.senha_hash or not pwd_context.verify(form_data.password, usuario.senha_hash):
         raise HTTPException(
             status_code=401, 
             detail="Email/CPF ou senha incorretos", # Mensagem clara pro Front
@@ -153,7 +170,7 @@ def criar_usuario(usuario_in: UsuarioCreate, session: Session = Depends(get_sess
     flag_completo = bool(usuario_in.email and usuario_in.senha and usuario_in.cpf)
 
     # 4. Hash da senha condicional (só hasheia se ele mandou senha)
-    senha_hasheada = f"hash_falso_{usuario_in.senha}" if usuario_in.senha else None
+    senha_hasheada = pwd_context.hash(usuario_in.senha) if usuario_in.senha else None
 
     # se for passado o cpf e email é pq o cadastro é completo
 
