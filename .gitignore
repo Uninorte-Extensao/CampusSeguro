@@ -1,0 +1,52 @@
+# --- Ambientes Virtuais (venv) ---
+venv/
+.venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Configurações e Segredos (.env) ---
+.env
+.env.*
+!.env.example
+*.env
+
+# --- Caches do Python e Bibliotecas ---
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Modelos e Caches do SpaCy / IA ---
+*.tar.gz
+*.whl
+
+# --- Arquivos do Sistema Operacional (Windows / macOS) ---
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# --- IDEs e Editores de Código ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+*.sublime-project
+
+# --- Logs e Dados Temporários ---
+*.log
+*.sqlite3
+*.tmp
+temp/
