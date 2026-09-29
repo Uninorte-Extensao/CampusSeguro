@@ -1,6 +1,6 @@
 from enum import Enum
 from uuid import UUID, uuid4
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Optional, List
 from sqlmodel import Field, SQLModel, Relationship
 
@@ -27,7 +27,6 @@ class Usuario(SQLModel, table=True):
     nome: str
     data_nascimento: Optional[date] = None 
     
-    
     # --- CAMPOS PARA O CADASTRO completo ---
     email: Optional[str] = Field(default=None, unique=True, index=True)
     senha_hash: Optional[str] = None
@@ -36,7 +35,6 @@ class Usuario(SQLModel, table=True):
     
     genero: Optional[str] = None
     cpf: Optional[str] = Field(default=None, unique=True, index=True)
-    # Se o cadastro for completo ou não (para permitir que o usuário finalize depois, se quiser)
     cadastro_completo: bool = Field(default=False)
 
     # Relacionamentos
@@ -50,7 +48,6 @@ class Usuario(SQLModel, table=True):
 class Ocorrencia(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     
-    # FK para Usuario (Opcional para garantir anonimato)
     usuario_id: Optional[UUID] = Field(default=None, foreign_key="usuario.id")
 
     descricao_resumida: str
@@ -58,11 +55,12 @@ class Ocorrencia(SQLModel, table=True):
     
     tipo_incidente: str
     descricao: str
-    localizacao: str # Coordenadas ou ponto do campus
+    localizacao: str
     status: StatusOcorrencia = Field(default=StatusOcorrencia.ABERTO)
-    data_criacao: datetime = Field(default_factory=datetime.utcnow)
     
-    # FK para o perfil de Segurança responsável pelo atendimento
+    # ALTERADO: datetime.now(timezone.utc) para aceitar timezone
+    data_criacao: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
     responsavel_id: Optional[UUID] = Field(default=None, foreign_key="usuario.id")
 
     # Relacionamentos
@@ -82,7 +80,9 @@ class AtualizacaoOcorrencia(SQLModel, table=True):
     ocorrencia_id: UUID = Field(foreign_key="ocorrencia.id")
     autor_id: UUID = Field(foreign_key="usuario.id")
     mensagem_acao: str
-    data_atualizado: datetime = Field(default_factory=datetime.utcnow)
+    
+    # ALTERADO: datetime.now(timezone.utc) para aceitar timezone
+    data_atualizado: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Relacionamento
     ocorrencia: Ocorrencia = Relationship(back_populates="atualizacoes")
