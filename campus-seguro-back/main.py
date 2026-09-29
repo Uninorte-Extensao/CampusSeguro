@@ -50,13 +50,17 @@ app = FastAPI(
     version = "1.0.0"
 )
 
+# Origens permitidas definidas diretamente no código (sem dependência do .env)
+origens_permitidas = [
+    "http://localhost:3000",       # React / Next.js local
+    "http://localhost:5173",       # Vite local
+    "http://127.0.0.1:3000",       # Alternativa de IP local
+    # "https://seu-front-em-producao.com", # Adicione a URL do deploy no futuro
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        origin.strip()
-        for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
-        if origin.strip()
-    ],
+    allow_origins=origens_permitidas,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

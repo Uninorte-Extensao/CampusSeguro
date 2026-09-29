@@ -8,7 +8,6 @@ from sqlmodel import Field, SQLModel, Relationship
 class TipoPerfil(str, Enum):
     ALUNO = "ALUNO"
     ADMINISTRADOR = "ADMINISTRADOR"
-    SEGURANCA = "SEGURANCA"
 
 class StatusOcorrencia(str, Enum):
     ABERTO = "ABERTO"
