@@ -55,7 +55,6 @@ origens_permitidas = [
     "http://localhost:3000",       # React / Next.js local
     "http://localhost:5173",       # Vite local
     "http://127.0.0.1:3000",       # Alternativa de IP local
-    # "https://seu-front-em-producao.com", # Adicione a URL do deploy no futuro
 ]
 
 app.add_middleware(
@@ -111,11 +110,12 @@ def get_usuario_atual(token: str = Depends(oauth2_scheme), session: Session = De
     return usuario
 
 def verificar_perfil_seguranca(usuario: Usuario = Depends(get_usuario_atual)):
-    """Trava de RBAC: Garante que apenas Agentes de Segurança acessem a rota."""
-    if usuario.tipo_perfil != TipoPerfil.SEGURANCA:
+    """Trava de RBAC: Garante que apenas Administradores acessem a rota."""
+    # ALTERADO: SEGURANCA -> ADMINISTRADOR
+    if usuario.tipo_perfil != TipoPerfil.ADMINISTRADOR:
         raise HTTPException(
             status_code=403, 
-            detail="Acesso negado. Esta ação requer perfil de Segurança."
+            detail="Acesso negado. Esta ação requer perfil de Administrador."
         )
     return usuario
 
@@ -128,11 +128,8 @@ def login_para_obter_token(
     session: Session = Depends(get_session)
 ):
     """Valida credenciais (Email ou CPF) e devolve um token JWT real."""
-    
-    # O texto que o usuário digitou no front (pode ser o email ou o CPF)
     identificador = form_data.username 
     
-    # Busca no banco onde o EMAIL é igual ao texto OU o CPF é igual ao texto
     usuario = session.exec(
         select(Usuario).where(
             or_(
@@ -145,7 +142,7 @@ def login_para_obter_token(
     if not usuario or not usuario.senha_hash or not pwd_context.verify(form_data.password, usuario.senha_hash):
         raise HTTPException(
             status_code=401, 
-            detail="Email/CPF ou senha incorretos", # Mensagem clara pro Front
+            detail="Email/CPF ou senha incorretos",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -156,29 +153,19 @@ def login_para_obter_token(
 @app.post("/usuarios/", response_model=UsuarioResponse, status_code=201, tags=["Usuários"])
 def criar_usuario(usuario_in: UsuarioCreate, session: Session = Depends(get_session)):
     """Cadastra um novo usuário no sistema (Suporta Cadastro Rápido e Completo)."""
-    
-    # 1. Validação de Email (somente se o email foi preenchido)
     if usuario_in.email:
         usuario_existente = session.exec(select(Usuario).where(Usuario.email == usuario_in.email)).first()
         if usuario_existente:
             raise HTTPException(status_code=400, detail="Email já cadastrado.")
 
-    # 2. Validação de CPF (somente se o CPF foi preenchido)
     if usuario_in.cpf:
         cpf_existente = session.exec(select(Usuario).where(Usuario.cpf == usuario_in.cpf)).first()
         if cpf_existente:
             raise HTTPException(status_code=400, detail="CPF já cadastrado.")
 
-    # 3. Lógica do Cadastro Rápido vs Completo
-    # Consideramos completo apenas se ele mandou email E senha E cpf
     flag_completo = bool(usuario_in.email and usuario_in.senha and usuario_in.cpf)
-
-    # 4. Hash da senha condicional (só hasheia se ele mandou senha)
     senha_hasheada = pwd_context.hash(usuario_in.senha) if usuario_in.senha else None
 
-    # se for passado o cpf e email é pq o cadastro é completo
-
-    # 5. Criar o objeto Usuario
     novo_usuario = Usuario(
         nome=usuario_in.nome,
         data_nascimento=usuario_in.data_nascimento,
@@ -187,7 +174,7 @@ def criar_usuario(usuario_in: UsuarioCreate, session: Session = Depends(get_sess
         cpf=usuario_in.cpf,
         senha_hash=senha_hasheada,
         tipo_perfil=usuario_in.tipo_perfil,
-        cadastro_completo=flag_completo # Salva a flag dinamicamente
+        cadastro_completo=flag_completo
     )
     
     session.add(novo_usuario)
@@ -223,7 +210,8 @@ def acionar_botao_emergencia(
         status=StatusOcorrencia.ABERTO,
         
         descricao_resumida=ocorrencia_in.descricao_resumida or "Acionamento rápido de emergência",
-        horario_ocorrencia=ocorrencia_in.horario_ocorrencia or datetime.utcnow()
+        # ALTERADO: datetime.now(timezone.utc) ao invés de utcnow()
+        horario_ocorrencia=ocorrencia_in.horario_ocorrencia or datetime.now(timezone.utc)
     )
     session.add(nova_ocorrencia)
     session.commit()
@@ -238,10 +226,11 @@ def listar_ocorrencias(
 ):
     """
     Inteligência de RBAC:
-    - Se for Segurança: Lista TODAS as ocorrências do campus.
+    - Se for Administrador: Lista TODAS as ocorrências do campus.
     - Se for Aluno/Colaborador: Lista APENAS as que ele mesmo criou.
     """
-    if usuario_atual.tipo_perfil == TipoPerfil.SEGURANCA:
+    # ALTERADO: SEGURANCA -> ADMINISTRADOR
+    if usuario_atual.tipo_perfil == TipoPerfil.ADMINISTRADOR:
         ocorrencias = session.exec(select(Ocorrencia)).all()
     else:
         ocorrencias = session.exec(select(Ocorrencia).where(Ocorrencia.usuario_id == usuario_atual.id)).all()
@@ -250,11 +239,7 @@ def listar_ocorrencias(
 
 @app.post("/ocorrencias/ia/preview", tags=["Inteligência Artificial"])
 def analisar_relato_com_ia(req: RelatoRequest):
-    """
-    Recebe um texto do Frontend e envia para o microserviço do Llama 
-    para extrair os dados da denúncia.
-    """
-    
+    """Recebe um texto do Frontend e envia para o microserviço do Llama para extrair os dados da denúncia."""
     try:
         dados = extrair_relato(req.descricao)
 
@@ -265,12 +250,12 @@ def analisar_relato_com_ia(req: RelatoRequest):
         
     except requests.exceptions.Timeout:
         raise HTTPException(
-            status_code=504, # 504 Gateway Timeout
+            status_code=504,
             detail="A API de IA demorou muito para responder."
         )
     except requests.exceptions.RequestException as e:
         raise HTTPException(
-            status_code=502, # 502 Bad Gateway (Erro ao conectar com outro servidor)
+            status_code=502,
             detail=f"Falha de comunicação com o serviço de IA: {str(e)}"
         )
 
@@ -281,12 +266,13 @@ def buscar_ocorrencia_por_id(
     session: Session = Depends(get_session),
     usuario_atual: Usuario = Depends(get_usuario_atual)
 ):
-    """Aluno acompanhando status da SUA ocorrência (ou Segurança vendo qualquer uma)."""
+    """Aluno acompanhando status da SUA ocorrência (ou Admin vendo qualquer uma)."""
     ocorrencia = session.get(Ocorrencia, ocorrencia_id)
     if not ocorrencia:
         raise HTTPException(status_code=404, detail="Ocorrência não encontrada")
     
-    if usuario_atual.tipo_perfil != TipoPerfil.SEGURANCA and ocorrencia.usuario_id != usuario_atual.id:
+    # ALTERADO: SEGURANCA -> ADMINISTRADOR
+    if usuario_atual.tipo_perfil != TipoPerfil.ADMINISTRADOR and ocorrencia.usuario_id != usuario_atual.id:
         raise HTTPException(status_code=403, detail="Acesso negado. Esta ocorrência pertence a outro usuário.")
         
     return ocorrencia
@@ -299,7 +285,7 @@ def atualizar_status_ocorrencia(
     session: Session = Depends(get_session),
     usuario_seguranca: Usuario = Depends(verificar_perfil_seguranca)
 ):
-    """Exclusivo para Segurança: Assumir o chamado e mudar status."""
+    """Exclusivo para Administrador/Responsável: Assumir o chamado e mudar status."""
     ocorrencia_db = session.get(Ocorrencia, ocorrencia_id)
     if not ocorrencia_db:
         raise HTTPException(status_code=404, detail="Ocorrência não encontrada")
@@ -321,33 +307,26 @@ def atualizar_status_ocorrencia(
 @app.post("/ocorrencias/{ocorrencia_id}/evidencias", status_code=201, tags=["Detalhes Ocorrência"])
 def adicionar_evidencia(
     ocorrencia_id: UUID,
-    # O arquivo físico vem aqui (multipart/form-data)
     arquivo: UploadFile = File(...), 
-    # Como não podemos usar JSON junto com arquivo, os outros campos vêm como Form
     tipo_midia: TipoMidia = Form(...), 
     session: Session = Depends(get_session),
     usuario_atual: Usuario = Depends(get_usuario_atual) 
 ):
     """Aluno anexando mídia na própria ocorrência."""
-    
-    # 1. Validações de Segurança (RBAC) - Sem alterações!
     ocorrencia = session.get(Ocorrencia, ocorrencia_id)
     if not ocorrencia:
         raise HTTPException(status_code=404, detail="Ocorrência não encontrada")
     
-    if usuario_atual.tipo_perfil != TipoPerfil.SEGURANCA and ocorrencia.usuario_id != usuario_atual.id:
+    # ALTERADO: SEGURANCA -> ADMINISTRADOR
+    if usuario_atual.tipo_perfil != TipoPerfil.ADMINISTRADOR and ocorrencia.usuario_id != usuario_atual.id:
         raise HTTPException(status_code=403, detail="Acesso negado. Você só pode enviar evidências para as suas próprias ocorrências.")
     
-    # 2. Fazer o upload físico para a nuvem
     try:
-        # Chama a função do seu bucket.py e guarda a Key retornada
         caminho_salvo = fazer_upload_arquivo(arquivo)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao salvar arquivo na nuvem: {str(e)}")
 
-    # 3. Salvar apenas a referência no Banco de Dados
     try:
-        # ATENÇÃO: Verifique se no seu models.py o campo é 'url_anexo' ou 'caminho_arquivo'
         nova_evidencia = Evidencia(
             ocorrencia_id=ocorrencia_id,
             caminho_salvo=caminho_salvo,
@@ -360,10 +339,9 @@ def adicionar_evidencia(
         return nova_evidencia
 
     except Exception as db_error:
-        session.rollback() # Cancela qualquer tentativa no banco
-        deletar_arquivo_bucket(caminho_salvo) # Remove o arquivo do R2
+        session.rollback()
+        deletar_arquivo_bucket(caminho_salvo)
         
-        # Agora sim, devolve o erro para o usuário
         raise HTTPException(
             status_code=500, 
             detail=f"Erro ao salvar no banco. O arquivo foi removido do storage para manter a integridade. Erro: {str(db_error)}"
@@ -381,7 +359,8 @@ def adicionar_atualizacao_linha_do_tempo(
     if not ocorrencia:
         raise HTTPException(status_code=404, detail="Ocorrência não encontrada")
         
-    if usuario_atual.tipo_perfil != TipoPerfil.SEGURANCA and ocorrencia.usuario_id != usuario_atual.id:
+    # ALTERADO: SEGURANCA -> ADMINISTRADOR
+    if usuario_atual.tipo_perfil != TipoPerfil.ADMINISTRADOR and ocorrencia.usuario_id != usuario_atual.id:
         raise HTTPException(status_code=403, detail="Acesso negado. Você só pode interagir com as suas próprias ocorrências.")
         
     nova_atualizacao = AtualizacaoOcorrencia(

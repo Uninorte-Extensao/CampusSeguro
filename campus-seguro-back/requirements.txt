@@ -8,7 +8,7 @@ pydantic
 pydantic[email]
 PyJWT
 passlib[bcrypt]
-bcrypt
+bcrypt==3.2.2
 spacy
 numpy
 requests
