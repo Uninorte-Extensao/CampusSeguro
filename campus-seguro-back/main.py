@@ -52,6 +52,9 @@ app = FastAPI(
 
 # Origens permitidas definidas diretamente no código (sem dependência do .env)
 origens_permitidas = [
+    "http://localhost:8081",       # Expo web (Metro) local
+    "http://127.0.0.1:8081",       # Expo web (alternativa de IP)
+    "http://localhost:19006",      # Expo web (webpack, versões antigas)
     "http://localhost:3000",       # React / Next.js local
     "http://localhost:5173",       # Vite local
     "http://127.0.0.1:3000",       # Alternativa de IP local
@@ -60,6 +63,9 @@ origens_permitidas = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origens_permitidas,
+    # Libera o domínio de produção e os previews automáticos da Vercel
+    # (ex.: https://seuapp.vercel.app e https://seuapp-git-branch.vercel.app)
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

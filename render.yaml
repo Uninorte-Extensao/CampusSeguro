@@ -1,0 +1,39 @@
+# Render Blueprint — deploy do backend (FastAPI) do Campus Seguro.
+# No Render: New + > Blueprint > conecte este repositório.
+# O banco é o Neon (externo): cole a connection string em DATABASE_URL.
+services:
+  - type: web
+    name: campus-seguro-api
+    runtime: docker
+    repo: # opcional: preenchido automaticamente ao conectar o repo no Render
+    region: oregon
+    plan: free
+    dockerfilePath: ./campus-seguro-back/Dockerfile
+    dockerContext: ./campus-seguro-back
+    healthCheckPath: /docs
+    autoDeploy: true
+    envVars:
+      # Gerada automaticamente pelo Render (não precisa criar à mão)
+      - key: SECRET_KEY
+        generateValue: true
+
+      # Cole aqui a connection string do Neon (Dashboard do Neon > Connection string)
+      # Formato: postgresql://user:senha@host/dbname?sslmode=require
+      - key: DATABASE_URL
+        sync: false
+
+      # Chave do OpenRouter para a análise por IA
+      - key: OPENROUTER_API_KEY
+        sync: false
+
+      # --- Cloudflare R2 (OPCIONAL) ---
+      # Sem essas, os anexos são salvos localmente (efêmero no container).
+      # Para persistir os anexos em produção, preencha as 4 no painel do Render.
+      - key: R2_ENDPOINT_URL
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
