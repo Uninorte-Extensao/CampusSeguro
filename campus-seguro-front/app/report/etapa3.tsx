@@ -42,9 +42,9 @@ export default function Etapa3Screen() {
   );
 
   const [agressor, setAgressor] = useState(
-    typeof params.agressor === "string"
+    typeof params.agressor === "string" && params.agressor.trim().length > 0
       ? params.agressor
-      : "Pessoa extremamente conservadora"
+      : "Agressor não identificado"
   );
 
   const [categoria, setCategoria] = useState(

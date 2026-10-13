@@ -1,7 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -10,10 +13,18 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useCampusSeguro } from "../../contexts/CampusSeguroContext";
+import {
+  criarOcorrencia,
+  enviarEvidencia,
+  EvidenciaUpload,
+} from "../../services/api";
 
 export default function Etapa5Screen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { recarregar } = useCampusSeguro();
+  const [enviando, setEnviando] = useState(false);
 
   const tipoAgressao =
     typeof params.tipoAgressao === "string"
@@ -31,7 +42,7 @@ export default function Etapa5Screen() {
   const agressor =
     typeof params.agressor === "string" && params.agressor.trim().length > 0
       ? params.agressor
-      : "Não informado";
+      : "Agressor não identificado";
 
   const categoria =
     typeof params.categoria === "string" ? params.categoria : "Assédio";
@@ -50,29 +61,75 @@ export default function Etapa5Screen() {
   const anonimo =
     typeof params.anonimo === "string" ? params.anonimo === "true" : true;
 
-  function handleEnviarDenuncia() {
-    const protocolo = gerarProtocolo();
+  async function handleEnviarDenuncia() {
+    if (enviando) return;
 
-    router.replace({
-      pathname: "/report/sucesso",
-      params: {
-        protocolo,
-        tipoAgressao,
-        local,
-        horario,
-        agressor,
-        categoria,
-        gravidade,
-        destino,
-        resumo,
-        anonimo: anonimo ? "true" : "false",
-      },
-    });
-  }
+    try {
+      setEnviando(true);
 
-  function gerarProtocolo() {
-    const numero = Math.floor(100000 + Math.random() * 900000);
-    return `CS-${numero}`;
+      const ocorrencia = await criarOcorrencia({
+        tipo_incidente: categoria || tipoAgressao,
+        descricao: resumo,
+        localizacao: local,
+        anonimo,
+        descricao_resumida: resumo.slice(0, 120),
+      });
+
+      // Envia os anexos escolhidos na etapa 4 (se houver)
+      let falhasAnexo = 0;
+      const anexosRaw = typeof params.anexos === "string" ? params.anexos : "";
+      if (anexosRaw) {
+        let anexos: EvidenciaUpload[] = [];
+        try {
+          anexos = JSON.parse(anexosRaw);
+        } catch {
+          anexos = [];
+        }
+
+        for (const anexo of anexos) {
+          try {
+            await enviarEvidencia(ocorrencia.id, anexo);
+          } catch {
+            falhasAnexo += 1;
+          }
+        }
+      }
+
+      // Atualiza o histórico com os dados reais do backend
+      await recarregar();
+
+      if (falhasAnexo > 0) {
+        Alert.alert(
+          "Denúncia registrada",
+          `Sua denúncia foi registrada, mas ${falhasAnexo} anexo(s) não puderam ser enviados.`
+        );
+      }
+
+      router.replace({
+        pathname: "/report/sucesso",
+        params: {
+          protocolo: ocorrencia.id,
+          tipoAgressao,
+          local,
+          horario,
+          agressor,
+          categoria,
+          gravidade,
+          destino,
+          resumo,
+          anonimo: anonimo ? "true" : "false",
+        },
+      });
+    } catch (error) {
+      Alert.alert(
+        "Não foi possível enviar",
+        error instanceof Error
+          ? error.message
+          : "Verifique sua conexão e tente novamente."
+      );
+    } finally {
+      setEnviando(false);
+    }
   }
 
   return (
@@ -163,15 +220,25 @@ export default function Etapa5Screen() {
           </View>
         </View>
 
-        <TouchableOpacity activeOpacity={0.88} onPress={handleEnviarDenuncia}>
+        <TouchableOpacity
+          activeOpacity={0.88}
+          onPress={handleEnviarDenuncia}
+          disabled={enviando}
+        >
           <LinearGradient
             colors={["#A8C0FF", "#4776FF"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            style={styles.sendButton}
+            style={[styles.sendButton, enviando && styles.sendButtonDisabled]}
           >
-            <Text style={styles.sendButtonText}>Enviar minha denúncia</Text>
-            <Feather name="send" size={18} color="#FFFFFF" />
+            {enviando ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Text style={styles.sendButtonText}>Enviar minha denúncia</Text>
+                <Feather name="send" size={18} color="#FFFFFF" />
+              </>
+            )}
           </LinearGradient>
         </TouchableOpacity>
       </ScrollView>
@@ -408,6 +475,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexDirection: "row",
     gap: 10,
+  },
+
+  sendButtonDisabled: {
+    opacity: 0.7,
   },
 
   sendButtonText: {

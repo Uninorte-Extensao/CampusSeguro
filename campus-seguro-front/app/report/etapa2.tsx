@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   ActivityIndicator,
   StatusBar,
@@ -11,6 +11,71 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { analisarRelatoIA } from "../../services/api";
+
+// A IA devolve o tipo em formato técnico (ex.: "agressao_fisica").
+// Convertemos para um rótulo legível exibido no formulário.
+const ROTULOS_TIPO: Record<string, string> = {
+  agressao_fisica: "Agressão Física",
+  assedio_moral: "Assédio Moral",
+  assedio_sexual: "Assédio Sexual",
+  injuria_racial: "Injúria Racial",
+  bullying: "Bullying",
+  ameaca: "Ameaça",
+  discriminacao: "Discriminação",
+  violencia_psicologica: "Violência Psicológica",
+  outro: "Outro",
+};
+
+function rotularTipo(valor: string): string {
+  const chave = valor.trim().toLowerCase().replace(/\s+/g, "_");
+  if (ROTULOS_TIPO[chave]) return ROTULOS_TIPO[chave];
+  // Fallback: "algo_assim" -> "Algo Assim"
+  return valor
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Normaliza a gravidade retornada pela IA para "Baixa" | "Média" | "Alta".
+function normalizarGravidade(valor?: string): "Baixa" | "Média" | "Alta" | null {
+  if (!valor) return null;
+  const v = valor.trim().toLowerCase();
+  if (v.startsWith("alt")) return "Alta";
+  if (v.startsWith("bai")) return "Baixa";
+  if (v.startsWith("med") || v.startsWith("méd")) return "Média";
+  return null;
+}
+
+// Rede de segurança: sinais de arma/lesão grave forçam gravidade "Alta",
+// mesmo que a IA tenha estimado algo menor.
+const PALAVRAS_ALTA = [
+  "faca", "facada", "esfaque", "esfaqu", "arma", "tiro", "revólver", "revolver",
+  "pistola", "bala", "sangue", "hospital", "morte", "matar", "mataram",
+  "estupro", "abuso sexual", "sequestro", "refém",
+];
+
+function gravidadePorPalavraChave(texto: string): "Alta" | null {
+  const t = texto.toLowerCase();
+  return PALAVRAS_ALTA.some((p) => t.includes(p)) ? "Alta" : null;
+}
+
+// Categoria mais ampla derivada do tipo de agressão.
+const CATEGORIA_POR_TIPO: Record<string, string> = {
+  agressao_fisica: "Violência Física",
+  assedio_moral: "Assédio",
+  assedio_sexual: "Assédio",
+  injuria_racial: "Discriminação",
+  bullying: "Bullying",
+  ameaca: "Ameaça",
+  discriminacao: "Discriminação",
+  violencia_psicologica: "Violência Psicológica",
+  outro: "Outro",
+};
+
+function categoriaPorTipo(tipo: string): string | null {
+  const chave = tipo.trim().toLowerCase().replace(/\s+/g, "_");
+  return CATEGORIA_POR_TIPO[chave] ?? null;
+}
 
 export default function Etapa2Screen() {
   const router = useRouter();
@@ -19,21 +84,95 @@ export default function Etapa2Screen() {
   const relato =
     typeof params.relato === "string" ? params.relato : "";
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      router.replace({
-        pathname: "/report/etapa3",
-        params: {
-          relato,
-          categoria: "Assédio",
-          gravidade: "Média",
-          destino: "Segurança",
-        },
-      });
-    }, 2600);
+  const audioUri =
+    typeof params.audioUri === "string" ? params.audioUri : "";
 
-    return () => clearTimeout(timer);
-  }, [relato, router]);
+  const tipoRelato =
+    typeof params.tipoRelato === "string" ? params.tipoRelato : "texto";
+
+  // Evita navegar duas vezes (resposta da IA + fallback)
+  const navegouRef = useRef(false);
+
+  useEffect(() => {
+    let ativo = true;
+
+    // Mantém a animação de "analisando" visível por um tempo mínimo
+    const inicio = Date.now();
+    const TEMPO_MINIMO = 1800;
+
+    function irParaEtapa3(extra: Record<string, string>) {
+      if (navegouRef.current || !ativo) return;
+      navegouRef.current = true;
+
+      const atraso = Math.max(0, TEMPO_MINIMO - (Date.now() - inicio));
+      setTimeout(() => {
+        if (!ativo) return;
+        router.replace({
+          pathname: "/report/etapa3",
+          params: {
+            relato,
+            audioUri,
+            tipoRelato,
+            categoria: "Assédio",
+            gravidade: "Média",
+            destino: "Segurança",
+            ...extra,
+          },
+        });
+      }, atraso);
+    }
+
+    async function analisar() {
+      // Sem texto (ex.: só áudio): segue o fluxo manual com os defaults.
+      if (!relato.trim()) {
+        irParaEtapa3({});
+        return;
+      }
+
+      try {
+        const resposta = await analisarRelatoIA(relato);
+        const dados = resposta?.dados_extraidos ?? {};
+
+        // Só repassa campos que a IA realmente preencheu.
+        const extra: Record<string, string> = {};
+        if (dados.tipo_agressao) {
+          const tipoRaw = String(dados.tipo_agressao);
+          extra.tipoAgressao = rotularTipo(tipoRaw);
+          const cat = categoriaPorTipo(tipoRaw);
+          if (cat) extra.categoria = cat;
+        }
+        if (dados.local) extra.local = String(dados.local);
+        if (dados.horario) extra.horario = String(dados.horario);
+
+        // Agressor: usa o nome extraído; se a IA não identificou, deixa claro.
+        const agressorRaw = dados.agressor ? String(dados.agressor).trim() : "";
+        extra.agressor = agressorRaw ? agressorRaw : "Agressor não identificado";
+
+        if (dados.descricao_resumida)
+          extra.resumo = String(dados.descricao_resumida);
+
+        // Gravidade: usa a estimativa da IA; palavras-chave de risco forçam "Alta".
+        const gravidadeIA = normalizarGravidade(
+          dados.gravidade ? String(dados.gravidade) : undefined
+        );
+        const gravidadeRisco = gravidadePorPalavraChave(relato);
+        const gravidade = gravidadeRisco ?? gravidadeIA;
+        if (gravidade) extra.gravidade = gravidade;
+
+        irParaEtapa3(extra);
+      } catch {
+        // IA indisponível (sem chave/offline): não bloqueia o usuário,
+        // segue para o preenchimento manual com o relato original.
+        irParaEtapa3({ resumo: relato });
+      }
+    }
+
+    analisar();
+
+    return () => {
+      ativo = false;
+    };
+  }, [relato, audioUri, tipoRelato, router]);
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>

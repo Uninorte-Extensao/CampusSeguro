@@ -1,5 +1,6 @@
 import { Tabs } from "@/components/navegacao/Tabs";
 import { tokens } from "@/constants/theme";
+import { useAuth } from "@/contexts/AuthContext";
 import { useCampusSeguro } from "@/contexts/CampusSeguroContext";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -21,6 +22,9 @@ import ReportarIcon from "../../assets/icons/reportar.svg";
 export default function HomeScreen() {
   const router = useRouter();
   const { naoLidas } = useCampusSeguro();
+  const { usuario } = useAuth();
+
+  const primeiroNome = usuario?.nome?.trim().split(" ")[0];
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -61,7 +65,9 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          <Text style={styles.title}>Olá, Gustavo</Text>
+          <Text style={styles.title}>
+            {primeiroNome ? `Olá, ${primeiroNome}` : "Olá"}
+          </Text>
           <Text style={styles.subtitle}>Sua segurança está ativa e monitorada.</Text>
         </View>
 

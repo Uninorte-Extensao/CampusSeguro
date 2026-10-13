@@ -1,4 +1,5 @@
 import { tokens } from "@/constants/theme";
+import { useAuth } from "@/contexts/AuthContext";
 import { Feather } from "@expo/vector-icons";
 import { useState } from "react";
 import {
@@ -22,6 +23,9 @@ type Tab = "inicio" | "relatar" | "historico" | "config";
 
 export default function HomeVisitanteScreen() {
   const [activeTab, setActiveTab] = useState<Tab>("inicio");
+  const { usuario } = useAuth();
+
+  const primeiroNome = usuario?.nome?.trim().split(" ")[0];
 
   const { width } = useWindowDimensions();
 
@@ -46,7 +50,9 @@ export default function HomeVisitanteScreen() {
             <Text style={styles.acessoBadgeText}>ACESSO RÁPIDO</Text>
           </View>
 
-          <Text style={styles.title}>Olá, Visitante</Text>
+          <Text style={styles.title}>
+            {primeiroNome ? `Olá, ${primeiroNome}` : "Olá, Visitante"}
+          </Text>
         </View>
 
         <View style={styles.alertCard}>

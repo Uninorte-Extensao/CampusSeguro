@@ -1,8 +1,11 @@
 import { Feather } from "@expo/vector-icons";
+import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
+  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -11,58 +14,106 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import type { EvidenciaUpload, TipoMidia } from "../../services/api";
 
 type EvidenceType = "foto" | "video" | "arquivo" | "audio";
 
 const evidencias: {
   id: EvidenceType;
   titulo: string;
+  tipoMidia: TipoMidia;
   icon: React.ComponentProps<typeof Feather>["name"];
 }[] = [
-  {
-    id: "foto",
-    titulo: "Foto",
-    icon: "image",
-  },
-  {
-    id: "video",
-    titulo: "Vídeo",
-    icon: "video",
-  },
-  {
-    id: "arquivo",
-    titulo: "Arquivo",
-    icon: "file-text",
-  },
-  {
-    id: "audio",
-    titulo: "Áudio",
-    icon: "mic",
-  },
+  { id: "foto", titulo: "Foto", tipoMidia: "Foto", icon: "image" },
+  { id: "video", titulo: "Vídeo", tipoMidia: "Vídeo", icon: "video" },
+  { id: "arquivo", titulo: "Arquivo", tipoMidia: "Documento", icon: "file-text" },
+  { id: "audio", titulo: "Áudio", tipoMidia: "Áudio", icon: "mic" },
 ];
 
 export default function Etapa4Screen() {
   const router = useRouter();
-  const [selecionadas, setSelecionadas] = useState<EvidenceType[]>([]);
+  // Dados que vieram da etapa 3 (tipo, local, agressor, resumo, etc.)
+  const params = useLocalSearchParams();
+  const [anexos, setAnexos] = useState<EvidenciaUpload[]>([]);
 
-  function toggleEvidencia(tipo: EvidenceType) {
-    setSelecionadas((atual) => {
-      if (atual.includes(tipo)) {
-        return atual.filter((item) => item !== tipo);
-      }
-
-      return [...atual, tipo];
-    });
+  function adicionarAnexo(anexo: EvidenciaUpload) {
+    setAnexos((atual) => [...atual, anexo]);
   }
 
-    function handleAvancar() {
-    router.push({
-        pathname: "/report/etapa5",
-        params: {
-        evidencias: selecionadas.join(","),
-        },
-    });
+  function removerAnexo(index: number) {
+    setAnexos((atual) => atual.filter((_, i) => i !== index));
+  }
+
+  async function escolherImagemOuVideo(tipo: "Foto" | "Vídeo") {
+    try {
+      const permissao = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissao.granted) {
+        Alert.alert(
+          "Permissão necessária",
+          "Permita o acesso à galeria para anexar."
+        );
+        return;
+      }
+
+      const resultado = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: tipo === "Foto" ? ["images"] : ["videos"],
+        quality: 0.8,
+      });
+
+      if (resultado.canceled || !resultado.assets?.length) return;
+
+      const a = resultado.assets[0];
+      const fallbackExt = tipo === "Foto" ? "jpg" : "mp4";
+      adicionarAnexo({
+        uri: a.uri,
+        name: a.fileName || `${tipo.toLowerCase()}-${Date.now()}.${fallbackExt}`,
+        mimeType: a.mimeType,
+        tipoMidia: tipo,
+      });
+    } catch {
+      Alert.alert("Erro", "Não foi possível abrir a galeria.");
     }
+  }
+
+  async function escolherArquivo(tipo: "Documento" | "Áudio") {
+    try {
+      const resultado = await DocumentPicker.getDocumentAsync({
+        type: tipo === "Áudio" ? "audio/*" : "*/*",
+        copyToCacheDirectory: true,
+      });
+
+      if (resultado.canceled || !resultado.assets?.length) return;
+
+      const a = resultado.assets[0];
+      adicionarAnexo({
+        uri: a.uri,
+        name: a.name || `${tipo.toLowerCase()}-${Date.now()}`,
+        mimeType: a.mimeType,
+        tipoMidia: tipo,
+      });
+    } catch {
+      Alert.alert("Erro", "Não foi possível abrir os arquivos.");
+    }
+  }
+
+  function handleSelecionarTipo(tipo: EvidenceType) {
+    if (tipo === "foto") return escolherImagemOuVideo("Foto");
+    if (tipo === "video") return escolherImagemOuVideo("Vídeo");
+    if (tipo === "audio") return escolherArquivo("Áudio");
+    return escolherArquivo("Documento");
+  }
+
+  function handleAvancar() {
+    router.push({
+      pathname: "/report/etapa5",
+      params: {
+        // Repassa tudo que foi preenchido nas etapas anteriores
+        ...params,
+        // Anexos serializados; a etapa 5 faz o upload após criar a ocorrência
+        anexos: JSON.stringify(anexos),
+      },
+    });
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
@@ -112,13 +163,16 @@ export default function Etapa4Screen() {
 
         <View style={styles.grid}>
           {evidencias.map((item) => {
-            const selected = selecionadas.includes(item.id);
+            const qtd = anexos.filter(
+              (a) => a.tipoMidia === item.tipoMidia
+            ).length;
+            const selected = qtd > 0;
 
             return (
               <TouchableOpacity
                 key={item.id}
                 activeOpacity={0.85}
-                onPress={() => toggleEvidencia(item.id)}
+                onPress={() => handleSelecionarTipo(item.id)}
                 style={[
                   styles.evidenceCard,
                   selected && styles.evidenceCardActive,
@@ -141,13 +195,35 @@ export default function Etapa4Screen() {
 
                 {selected && (
                   <View style={styles.checkBadge}>
-                    <Feather name="check" size={13} color="#07101F" />
+                    <Text style={styles.checkBadgeText}>{qtd}</Text>
                   </View>
                 )}
               </TouchableOpacity>
             );
           })}
         </View>
+
+        {anexos.length > 0 && (
+          <View style={styles.anexosList}>
+            {anexos.map((anexo, index) => (
+              <View key={`${anexo.uri}-${index}`} style={styles.anexoItem}>
+                <Feather name="paperclip" size={16} color="#40DBD5" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.anexoNome} numberOfLines={1}>
+                    {anexo.name}
+                  </Text>
+                  <Text style={styles.anexoTipo}>{anexo.tipoMidia}</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => removerAnexo(index)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Feather name="trash-2" size={16} color="#FF6B6B" />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
 
         <View style={styles.infoCard}>
           <View style={styles.infoIcon}>
@@ -165,7 +241,7 @@ export default function Etapa4Screen() {
 
         <View style={styles.counterCard}>
           <Text style={styles.counterLabel}>Evidências selecionadas</Text>
-          <Text style={styles.counterValue}>{selecionadas.length}</Text>
+          <Text style={styles.counterValue}>{anexos.length}</Text>
         </View>
 
         <TouchableOpacity activeOpacity={0.88} onPress={handleAvancar}>
@@ -320,12 +396,49 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 12,
     right: 12,
-    width: 22,
+    minWidth: 22,
     height: 22,
+    paddingHorizontal: 6,
     borderRadius: 11,
     backgroundColor: "#40DBD5",
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  checkBadgeText: {
+    color: "#07101F",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+
+  anexosList: {
+    gap: 10,
+    marginBottom: 20,
+  },
+
+  anexoItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 16,
+    backgroundColor: "#0F1728",
+    borderWidth: 1,
+    borderColor: "#26304A",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+
+  anexoNome: {
+    color: "#EAF0FF",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  anexoTipo: {
+    color: "#7F8AA3",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 2,
   },
 
   infoCard: {

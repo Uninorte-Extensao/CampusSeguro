@@ -51,13 +51,23 @@ SYSTEM_PROMPT = """
 
             - tipo_agressao nunca pode ser vazio
 
+            - gravidade: estime o nível de risco do incidente.
+            - Valores permitidos: "Baixa", "Média", "Alta"
+            - Use "Alta" quando houver: uso ou menção de arma (faca, facada,
+              arma de fogo, tiro), lesão física, ameaça de morte, violência
+              sexual, roubo com violência ou risco iminente à vida.
+            - Use "Média" para agressões sem lesão grave, ameaças genéricas,
+              assédio moral/racial recorrente.
+            - Use "Baixa" para situações leves, sem contato físico nem ameaça direta.
+            - gravidade nunca pode ser vazia.
+
             - Se não for denúncia:
             - "is_valid_denuncia": false
             - preencher "motivo_invalidacao"
 
             Tipos:
-            agressao_fisica, assedio_moral, assedio_sexual, 
-            injuria_racial, bullying, ameaca, discriminacao, 
+            agressao_fisica, assedio_moral, assedio_sexual,
+            injuria_racial, bullying, ameaca, discriminacao,
             violencia_psicologica, outro
 
             JSON esperado:
@@ -65,6 +75,7 @@ SYSTEM_PROMPT = """
             "is_valid_denuncia": bool,
             "motivo_invalidacao": "",
             "tipo_agressao": "",
+            "gravidade": "",
             "horario": "",
             "local": "",
             "agressor": "",

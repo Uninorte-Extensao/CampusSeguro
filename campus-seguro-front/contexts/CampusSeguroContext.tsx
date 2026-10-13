@@ -4,9 +4,16 @@ import {
     ReactNode,
     useCallback,
     useContext,
+    useEffect,
     useMemo,
     useState,
 } from "react";
+import {
+    listarOcorrencias,
+    Ocorrencia,
+    StatusOcorrencia,
+} from "../services/api";
+import { useAuth } from "./AuthContext";
 
 export type StatusRelato = "ATIVO" | "EM ANÁLISE" | "EM ATENDIMENTO" | "CONCLUÍDO";
 
@@ -44,118 +51,77 @@ interface CampusSeguroContextData {
   relatos: Relato[];
   notificacoes: Notificacao[];
   naoLidas: number;
+  carregandoRelatos: boolean;
+  erroRelatos: string | null;
   buscarRelatoPorId: (id?: string | null) => Relato | undefined;
   adicionarRelato: (relato: NovoRelato) => Relato;
+  recarregar: () => Promise<void>;
   marcarNotificacaoLida: (id: string) => void;
   marcarTodasNotificacoesLidas: () => void;
 }
 
-const RELATOS_INICIAIS: Relato[] = [
-  {
-    id: "88291",
-    tipo: "Ocorrência Emergencial",
-    status: "ATIVO",
-    local: "Bloco A – UniNorte",
-    data: "Hoje",
-    hora: "14:32",
-    descricao: "Indivíduo suspeito avistado tentando acessar uma área restrita do bloco A.",
-    icone: "alert-octagon",
-  },
-  {
-    id: "88275",
-    tipo: "Atividade Suspeita",
-    status: "EM ANÁLISE",
-    local: "Estacionamento Leste",
-    data: "Hoje",
-    hora: "12:15",
-    descricao: "Dois indivíduos permaneceram por muito tempo próximos aos veículos no estacionamento.",
-    icone: "eye",
-  },
-  {
-    id: "88240",
-    tipo: "Roubo/Furto",
-    status: "EM ATENDIMENTO",
-    local: "Biblioteca Central",
-    data: "Ontem",
-    hora: "09:40",
-    descricao: "Notebook foi retirado da área de estudos individuais sem autorização do proprietário.",
-    icone: "lock",
-  },
-  {
-    id: "88198",
-    tipo: "Vandalismo",
-    status: "CONCLUÍDO",
-    local: "Quadra Esportiva",
-    data: "28/03/2026",
-    hora: "18:20",
-    descricao: "Foram encontradas pichações nas paredes externas da quadra esportiva.",
-    icone: "monitor",
-  },
-];
-
-const NOTIFICACOES_INICIAIS: Notificacao[] = [
-  {
-    id: "n1",
-    tipo: "denuncia",
-    titulo: "Sua denúncia foi recebida",
-    mensagem: "A denúncia #88291 foi encaminhada para nossa equipe de patrulha.",
-    tempo: "agora",
-    lida: false,
-    protocolo: "#88291",
-    registroId: "88291",
-  },
-  {
-    id: "n2",
-    tipo: "emergencia",
-    titulo: "Atendimento iniciado",
-    mensagem: "Equipe de segurança foi acionada e está acompanhando a ocorrência.",
-    tempo: "2 min",
-    lida: false,
-    protocolo: "#88291",
-    registroId: "88291",
-  },
-  {
-    id: "n3",
-    tipo: "denuncia",
-    titulo: "Status atualizado: Em análise",
-    mensagem: "Sua denúncia #88275 está sendo analisada pela coordenação.",
-    tempo: "12 min",
-    lida: false,
-    protocolo: "#88275",
-    registroId: "88275",
-  },
-  {
-    id: "n4",
-    tipo: "alerta",
-    titulo: "Atividade suspeita próxima",
-    mensagem: "Aviso de segurança no Bloco C – evite a área se possível.",
-    tempo: "1 h",
-    lida: true,
-  },
-  {
-    id: "n5",
-    tipo: "denuncia",
-    titulo: "Denúncia concluída",
-    mensagem: "A ocorrência #88198 foi finalizada com sucesso pela equipe.",
-    tempo: "Ontem",
-    lida: true,
-    protocolo: "#88198",
-    registroId: "88198",
-  },
-  {
-    id: "n6",
-    tipo: "sistema",
-    titulo: "Bem-vindo ao Campus Seguro",
-    mensagem: "Mantenha seus dados atualizados para uma melhor experiência.",
-    tempo: "2 d",
-    lida: true,
-  },
-];
-
 const CampusSeguroContext = createContext<CampusSeguroContextData | null>(null);
 
-function gerarIdRelato() {
-  return String(Math.floor(10000 + Math.random() * 90000));
+// --- Mapeamento backend -> UI ---
+const STATUS_MAP: Record<StatusOcorrencia, StatusRelato> = {
+  ABERTO: "ATIVO",
+  EM_ATENDIMENTO: "EM ATENDIMENTO",
+  RESOLVIDO: "CONCLUÍDO",
+};
+
+function iconePorTipo(tipo: string): IconeFeather {
+  const t = (tipo || "").toLowerCase();
+  if (t.includes("roubo") || t.includes("furto")) return "lock";
+  if (t.includes("vandal")) return "monitor";
+  if (t.includes("suspeit")) return "eye";
+  if (t.includes("emerg")) return "alert-octagon";
+  if (t.includes("assédio") || t.includes("assedio")) return "alert-triangle";
+  return "alert-circle";
+}
+
+function formatarData(iso: string): { data: string; hora: string } {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    return { data: "—", hora: "--:--" };
+  }
+
+  const hora = `${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes()
+  ).padStart(2, "0")}`;
+
+  const hoje = new Date();
+  const ontem = new Date();
+  ontem.setDate(hoje.getDate() - 1);
+
+  const mesmaData = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  let data: string;
+  if (mesmaData(d, hoje)) data = "Hoje";
+  else if (mesmaData(d, ontem)) data = "Ontem";
+  else
+    data = `${String(d.getDate()).padStart(2, "0")}/${String(
+      d.getMonth() + 1
+    ).padStart(2, "0")}/${d.getFullYear()}`;
+
+  return { data, hora };
+}
+
+function mapearOcorrencia(o: Ocorrencia): Relato {
+  const { data, hora } = formatarData(o.horario_ocorrencia || o.data_criacao);
+
+  return {
+    id: o.id,
+    tipo: o.tipo_incidente || "Ocorrência",
+    status: STATUS_MAP[o.status] ?? "ATIVO",
+    local: o.localizacao || "Local não informado",
+    data,
+    hora,
+    descricao: o.descricao || o.descricao_resumida || "",
+    icone: iconePorTipo(o.tipo_incidente),
+  };
 }
 
 function gerarIdNotificacao() {
@@ -163,26 +129,63 @@ function gerarIdNotificacao() {
 }
 
 export function CampusSeguroProvider({ children }: { children: ReactNode }) {
-  const [relatos, setRelatos] = useState<Relato[]>(RELATOS_INICIAIS);
-  const [notificacoes, setNotificacoes] = useState<Notificacao[]>(NOTIFICACOES_INICIAIS);
+  const { token } = useAuth();
+
+  const [relatos, setRelatos] = useState<Relato[]>([]);
+  const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
+  const [carregandoRelatos, setCarregandoRelatos] = useState(false);
+  const [erroRelatos, setErroRelatos] = useState<string | null>(null);
 
   const naoLidas = useMemo(
     () => notificacoes.filter((notificacao) => !notificacao.lida).length,
     [notificacoes]
   );
 
+  const recarregar = useCallback(async () => {
+    if (!token) {
+      setRelatos([]);
+      return;
+    }
+
+    setCarregandoRelatos(true);
+    setErroRelatos(null);
+
+    try {
+      const ocorrencias = await listarOcorrencias();
+      const mapeadas = ocorrencias
+        .map(mapearOcorrencia)
+        .sort((a, b) => (a.data === "Hoje" ? -1 : 0)); // recentes primeiro (best-effort)
+      setRelatos(mapeadas);
+    } catch (error) {
+      setErroRelatos(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar os relatos."
+      );
+    } finally {
+      setCarregandoRelatos(false);
+    }
+  }, [token]);
+
+  // Recarrega sempre que o usuário autentica/desloga
+  useEffect(() => {
+    recarregar();
+  }, [recarregar]);
+
   const buscarRelatoPorId = useCallback(
     (id?: string | null) => {
       if (!id) return undefined;
-      return relatos.find((relato) => relato.id === id.replace("#", ""));
+      const alvo = id.replace("#", "");
+      return relatos.find((relato) => relato.id === alvo);
     },
     [relatos]
   );
 
+  // Inserção otimista local (a tela de sucesso navega antes do refetch terminar)
   const adicionarRelato = useCallback((novoRelato: NovoRelato) => {
     const relato: Relato = {
       ...novoRelato,
-      id: novoRelato.id ?? gerarIdRelato(),
+      id: novoRelato.id ?? `local-${Date.now()}`,
     };
 
     setRelatos((prev) => [relato, ...prev]);
@@ -222,8 +225,11 @@ export function CampusSeguroProvider({ children }: { children: ReactNode }) {
       relatos,
       notificacoes,
       naoLidas,
+      carregandoRelatos,
+      erroRelatos,
       buscarRelatoPorId,
       adicionarRelato,
+      recarregar,
       marcarNotificacaoLida,
       marcarTodasNotificacoesLidas,
     }),
@@ -231,8 +237,11 @@ export function CampusSeguroProvider({ children }: { children: ReactNode }) {
       relatos,
       notificacoes,
       naoLidas,
+      carregandoRelatos,
+      erroRelatos,
       buscarRelatoPorId,
       adicionarRelato,
+      recarregar,
       marcarNotificacaoLida,
       marcarTodasNotificacoesLidas,
     ]

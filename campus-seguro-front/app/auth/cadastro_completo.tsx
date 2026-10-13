@@ -25,7 +25,9 @@ import LockIcon from "../../assets/icons/lock.svg";
 import PeopleIcon from "../../assets/icons/people.svg";
 import UserIcon from "../../assets/icons/user.svg";
 import GradientButton from "../../components/ui/BotaoGradiente";
+import { useAuth } from "../../contexts/AuthContext";
 import {
+  dataBRParaISO,
   formatCpf,
   formatDateBR,
   sanitizeEmail,
@@ -34,6 +36,7 @@ import {
 
 export default function CadastroCompletoScreen() {
   const { colors } = useTheme();
+  const { registrar } = useAuth();
 
   const [sexo, setSexo] = useState("");
   const [sexoDropdownOpen, setSexoDropdownOpen] = useState(false);
@@ -48,6 +51,7 @@ export default function CadastroCompletoScreen() {
 
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = useState(false);
+  const [enviando, setEnviando] = useState(false);
 
   const opcoesSexo = [
     { label: "Masculino", value: "masculino" },
@@ -62,7 +66,20 @@ export default function CadastroCompletoScreen() {
     opcoesSexo.find((item) => item.value === sexo)?.label ??
     "Selecione seu gênero/sexo";
 
-  function handleCadastroCompleto() {
+  async function handleCadastroCompleto() {
+    if (!nomeCompleto.trim() || !email.trim() || !cpf.trim() || !senha) {
+      Alert.alert(
+        "Campos obrigatórios",
+        "Preencha nome, e-mail, CPF e senha para continuar."
+      );
+      return;
+    }
+
+    if (senha !== confirmarSenha) {
+      Alert.alert("Senhas diferentes", "A confirmação de senha não confere.");
+      return;
+    }
+
     if (!aceitouTermos) {
       Alert.alert(
         "Termos obrigatórios",
@@ -71,8 +88,29 @@ export default function CadastroCompletoScreen() {
       return;
     }
 
-    Alert.alert("Cadastro completo", "Exemplo de cadastro completo realizado.");
-    router.replace("../home/home");
+    const genero =
+      opcoesSexo.find((item) => item.value === sexo)?.label ?? undefined;
+
+    try {
+      setEnviando(true);
+      await registrar({
+        nome: nomeCompleto.trim(),
+        email: email.trim(),
+        cpf: cpf.trim(),
+        senha,
+        data_nascimento: dataBRParaISO(dataNascimento),
+        genero,
+        tipo_perfil: "ALUNO",
+      });
+      router.replace("../home/home");
+    } catch (error) {
+      Alert.alert(
+        "Não foi possível cadastrar",
+        error instanceof Error ? error.message : "Tente novamente."
+      );
+    } finally {
+      setEnviando(false);
+    }
   }
 
   const styles = StyleSheet.create({
@@ -575,8 +613,9 @@ export default function CadastroCompletoScreen() {
 
             <View style={{ marginTop: 8 }}>
               <GradientButton
-                title="Cadastrar"
+                title={enviando ? "Cadastrando..." : "Cadastrar"}
                 onPress={handleCadastroCompleto}
+                disabled={enviando}
               />
             </View>
 

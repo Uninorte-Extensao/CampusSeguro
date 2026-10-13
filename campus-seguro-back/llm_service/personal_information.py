@@ -75,13 +75,16 @@ def extrair_cartoes(texto: str):
 def anonimizar_texto(texto: str):
     resultado = texto
 
+    # IMPORTANTE: nomes de pessoas NÃO são anonimizados aqui.
+    # Em uma denúncia, o nome do agressor é uma informação essencial do relato
+    # (antes, "Luiz Lula" virava "[NOME] [NOME]"). Continuamos mascarando apenas
+    # identificadores sensíveis que não devem vazar para a IA de terceiros.
     substituicoes = [
         (extrair_emails(texto), "[EMAIL]"),
         (extrair_cartoes(texto), "[CARTAO]"),
         (extrair_telefones(texto), "[TELEFONE]"),
         (extrair_cpfs(texto), "[CPF]"),
         (extrair_ceps(texto), "[CEP]"),
-        (extrair_nomes(texto), "[NOME]"),
     ]
 
     for valores, tag in substituicoes:

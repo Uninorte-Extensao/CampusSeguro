@@ -18,6 +18,7 @@ class TipoMidia(str, Enum):
     FOTO = "Foto"
     VIDEO = "Vídeo"
     AUDIO = "Áudio"
+    DOCUMENTO = "Documento"
 
 # --- MODELOS ---
 

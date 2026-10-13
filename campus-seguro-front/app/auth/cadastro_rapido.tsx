@@ -9,15 +9,24 @@ import InfoIcon from "../../assets/icons/info.svg";
 import UserIcon from "../../assets/icons/user.svg";
 import GradientButton from "../../components/ui/BotaoGradiente";
 import { tokens } from "../../constants/theme";
-import { formatDateBR } from "../../utils/mascaras";
+import { useAuth } from "../../contexts/AuthContext";
+import { dataBRParaISO, formatDateBR, sanitizeFullName } from "../../utils/mascaras";
 
 export default function CadastroRapidoScreen() {
-  
+
   const { colors } = useTheme();
+  const { registrar } = useAuth();
   const [aceitouTermos, setAceitouTermos] = useState(false);
+  const [nome, setNome] = useState("");
   const [dataNascimento, setDataNascimento] = useState("");
-  
-  function handleCadastroRapido() {
+  const [enviando, setEnviando] = useState(false);
+
+  async function handleCadastroRapido() {
+    if (!nome.trim()) {
+      Alert.alert("Nome obrigatório", "Informe seu nome completo para continuar.");
+      return;
+    }
+
     if (!aceitouTermos) {
       Alert.alert(
         "Termos obrigatórios",
@@ -26,8 +35,22 @@ export default function CadastroRapidoScreen() {
       return;
     }
 
-    Alert.alert("Cadastro completo", "Exemplo de cadastro completo realizado.");
-    router.replace("../home/home_visitante");
+    try {
+      setEnviando(true);
+      await registrar({
+        nome: nome.trim(),
+        data_nascimento: dataBRParaISO(dataNascimento),
+        tipo_perfil: "ALUNO",
+      });
+      router.replace("../home/home_visitante");
+    } catch (error) {
+      Alert.alert(
+        "Não foi possível cadastrar",
+        error instanceof Error ? error.message : "Tente novamente."
+      );
+    } finally {
+      setEnviando(false);
+    }
   }
 
 
@@ -246,6 +269,9 @@ export default function CadastroRapidoScreen() {
             <TextInput
               placeholder="Nome completo sem abreviações"
               placeholderTextColor="#8d90a17c"
+              value={nome}
+              onChangeText={(text) => setNome(sanitizeFullName(text))}
+              maxLength={80}
               style={styles.input}
             />
           </View>
@@ -306,8 +332,9 @@ export default function CadastroRapidoScreen() {
 
           <View style={{ marginTop: 16 }}>
             <GradientButton
-              title="Cadastrar"
-              onPress={handleCadastroRapido}/>
+              title={enviando ? "Cadastrando..." : "Cadastrar"}
+              onPress={handleCadastroRapido}
+              disabled={enviando}/>
           </View>
           
           <TouchableOpacity

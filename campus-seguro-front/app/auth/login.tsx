@@ -23,21 +23,39 @@ import EmailIcon from "../../assets/icons/email.svg";
 import LockIcon from "../../assets/icons/lock.svg";
 import RaioIcon from "../../assets/icons/raio2.svg";
 import GradientButton from "../../components/ui/BotaoGradiente";
+import { useAuth } from "../../contexts/AuthContext";
 import { formatEmailOrCpf, isCpfLike } from "../../utils/mascaras";
 
 export default function LoginScreen() {
+  const { entrar } = useAuth();
   const [emailOrCpf, setEmailOrCpf] = useState("");
   const [senha, setSenha] = useState("");
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [modalEsqueceuSenha, setModalEsqueceuSenha] = useState(false);
   const [emailRecuperacao, setEmailRecuperacao] = useState("");
   const [linkEnviado, setLinkEnviado] = useState(false);
+  const [entrando, setEntrando] = useState(false);
 
   const inputMaxLength = isCpfLike(emailOrCpf) ? 14 : 50;
 
-  function handleLogin() {
-    Alert.alert("Login", "Exemplo de login realizado com sucesso.");
-    router.replace("../home/home");
+  async function handleLogin() {
+    if (!emailOrCpf.trim() || !senha) {
+      Alert.alert("Campos obrigatórios", "Informe seu e-mail/CPF e a senha.");
+      return;
+    }
+
+    try {
+      setEntrando(true);
+      await entrar(emailOrCpf.trim(), senha);
+      router.replace("../home/home");
+    } catch (error) {
+      Alert.alert(
+        "Não foi possível entrar",
+        error instanceof Error ? error.message : "Tente novamente."
+      );
+    } finally {
+      setEntrando(false);
+    }
   }
 
   function handleAbrirModalSenha() {
@@ -139,7 +157,11 @@ export default function LoginScreen() {
           </View>
         </View>
 
-        <GradientButton title="Entrar" onPress={handleLogin} />
+        <GradientButton
+          title={entrando ? "Entrando..." : "Entrar"}
+          onPress={handleLogin}
+          disabled={entrando}
+        />
 
         <View style={styles.dividerTextWrapper}>
           <View style={styles.divider3} />

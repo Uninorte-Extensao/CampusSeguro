@@ -10,7 +10,7 @@ from sqlmodel import Session, SQLModel, create_engine, or_, select
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from llm_service.open_router_service import extrair_relato
 from models import Ocorrencia, StatusOcorrencia, Usuario, AtualizacaoOcorrencia, Evidencia, TipoPerfil, TipoMidia
-from schemas import (Token, UsuarioCreate, UsuarioResponse, OcorrenciaCreate, OcorrenciaUpdate, EvidenciaCreate, AtualizacaoCreate, RelatoRequest)
+from schemas import (Token, UsuarioCreate, UsuarioResponse, UsuarioComToken, OcorrenciaCreate, OcorrenciaUpdate, EvidenciaCreate, AtualizacaoCreate, RelatoRequest)
 
 from fastapi import File, UploadFile, Form
 from bucket import deletar_arquivo_bucket, fazer_upload_arquivo
@@ -96,15 +96,23 @@ def get_usuario_atual(token: str = Depends(oauth2_scheme), session: Session = De
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
+        sub: str = payload.get("sub")
+        if sub is None:
             raise credentials_exception
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expirado. Faça login novamente.")
     except jwt.InvalidTokenError:
         raise credentials_exception
-    
-    usuario = session.exec(select(Usuario).where(Usuario.email == email)).first()
+
+    # O "sub" pode ser o e-mail (cadastro completo) ou o id do usuário
+    # (cadastro rápido, que não possui e-mail/senha).
+    usuario = session.exec(select(Usuario).where(Usuario.email == sub)).first()
+    if usuario is None:
+        try:
+            usuario = session.get(Usuario, UUID(sub))
+        except (ValueError, TypeError):
+            usuario = None
+
     if usuario is None:
         raise credentials_exception
     return usuario
@@ -150,7 +158,7 @@ def login_para_obter_token(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@app.post("/usuarios/", response_model=UsuarioResponse, status_code=201, tags=["Usuários"])
+@app.post("/usuarios/", response_model=UsuarioComToken, status_code=201, tags=["Usuários"])
 def criar_usuario(usuario_in: UsuarioCreate, session: Session = Depends(get_session)):
     """Cadastra um novo usuário no sistema (Suporta Cadastro Rápido e Completo)."""
     if usuario_in.email:
@@ -180,8 +188,23 @@ def criar_usuario(usuario_in: UsuarioCreate, session: Session = Depends(get_sess
     session.add(novo_usuario)
     session.commit()
     session.refresh(novo_usuario)
-    
-    return novo_usuario
+
+    # Já devolve um token para o app autenticar imediatamente após o cadastro.
+    # Usa o e-mail como "sub" quando existe; caso contrário o id (cadastro rápido).
+    sub = novo_usuario.email if novo_usuario.email else str(novo_usuario.id)
+    access_token = criar_token_acesso(data={"sub": sub})
+
+    return UsuarioComToken(
+        usuario=novo_usuario,
+        access_token=access_token,
+        token_type="bearer",
+    )
+
+
+@app.get("/usuarios/me", response_model=UsuarioResponse, tags=["Usuários"])
+def obter_usuario_atual(usuario_atual: Usuario = Depends(get_usuario_atual)):
+    """Retorna os dados do usuário autenticado (usado pelo app após o login)."""
+    return usuario_atual
 
 
 @app.get("/usuarios/", response_model=List[UsuarioResponse], tags=["Usuários"])
@@ -257,6 +280,13 @@ def analisar_relato_com_ia(req: RelatoRequest):
         raise HTTPException(
             status_code=502,
             detail=f"Falha de comunicação com o serviço de IA: {str(e)}"
+        )
+    except ValueError as e:
+        # Ex.: OPENROUTER_API_KEY não configurada. O app trata isso e segue
+        # para o preenchimento manual da denúncia.
+        raise HTTPException(
+            status_code=503, # 503 Service Unavailable
+            detail=f"Serviço de IA indisponível: {str(e)}"
         )
 
 

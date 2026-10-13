@@ -6,11 +6,13 @@ import {
     InputField,
     PrimaryButton,
 } from "../../components/configuracoes/ConfigTelaBase";
+import { useAuth } from "../../contexts/AuthContext";
 
 export default function PerfilScreen() {
-  const [nome, setNome] = useState("Gustavo Assí");
-  const [email, setEmail] = useState("gustavo@email.com");
-  const [telefone, setTelefone] = useState("(92) 99999-9999");
+  const { usuario } = useAuth();
+  const [nome, setNome] = useState(usuario?.nome ?? "");
+  const [email, setEmail] = useState(usuario?.email ?? "");
+  const [telefone, setTelefone] = useState("");
 
   return (
     <ConfigScreen title="Perfil" subtitle="Edite suas informações pessoais.">

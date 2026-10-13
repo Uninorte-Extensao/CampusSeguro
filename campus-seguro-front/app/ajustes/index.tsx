@@ -1,15 +1,31 @@
 import { Tabs } from "@/components/navegacao/Tabs";
 import { useRouter } from "expo-router";
-import { StatusBar, View } from "react-native";
+import { Alert, StatusBar, View } from "react-native";
 import {
   ConfigScreen,
   SectionTitle,
   SettingsGroup,
   SettingsRow,
 } from "../../components/configuracoes/ConfigTelaBase";
+import { useAuth } from "../../contexts/AuthContext";
 
 export default function AjustesScreen() {
   const router = useRouter();
+  const { sair } = useAuth();
+
+  function handleSair() {
+    Alert.alert("Sair da conta", "Deseja encerrar a sessão?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Sair",
+        style: "destructive",
+        onPress: async () => {
+          await sair();
+          router.replace("/auth/login");
+        },
+      },
+    ]);
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: "#070B16" }}>
@@ -86,6 +102,18 @@ export default function AjustesScreen() {
             subtitle="Políticas de uso do Campus Seguro"
             showDivider={false}
             onPress={() => router.push("/ajustes/termos" as any)}
+          />
+        </SettingsGroup>
+
+        <SectionTitle>SESSÃO</SectionTitle>
+
+        <SettingsGroup>
+          <SettingsRow
+            icon="log-out"
+            title="Sair da conta"
+            subtitle="Encerrar sessão neste dispositivo"
+            showDivider={false}
+            onPress={handleSair}
           />
         </SettingsGroup>
       </ConfigScreen>

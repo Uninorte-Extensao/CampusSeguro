@@ -40,14 +40,21 @@ class UsuarioCreate(BaseModel):
 class UsuarioResponse(BaseModel):
     id: UUID
     nome: str
-    data_nascimento: Optional[date] = None 
-    email: Optional[str] = None            
-    cpf: Optional[str] = None              
+    data_nascimento: Optional[date] = None
+    email: Optional[str] = None
+    cpf: Optional[str] = None
     tipo_perfil: TipoPerfil
     cadastro_completo: bool
-    
+
     class Config:
         from_attributes = True
+
+# Retorno do cadastro: já devolve o token para o app autenticar na hora
+# (útil também para o Cadastro Rápido, que não tem senha para fazer /login depois)
+class UsuarioComToken(BaseModel):
+    usuario: UsuarioResponse
+    access_token: str
+    token_type: str = "bearer"
 
 # --- REQUISÇÃO DA IA (FRONT-END -> BACK-END) ---
 class RelatoRequest(BaseModel):

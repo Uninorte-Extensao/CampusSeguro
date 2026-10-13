@@ -4,11 +4,17 @@ import { StyleSheet, Text, TouchableOpacity } from "react-native";
 type Props = {
   title: string;
   onPress: () => void;
+  disabled?: boolean;
 };
 
-export default function GradientButton({ title, onPress }: Props) {
+export default function GradientButton({ title, onPress, disabled = false }: Props) {
   return (
-    <TouchableOpacity activeOpacity={0.85} onPress={onPress}>
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={onPress}
+      disabled={disabled}
+      style={disabled && styles.disabled}
+    >
       <LinearGradient
         colors={["#B5C4FF", "#2F6BFF"]}
         start={{ x: 0, y: 0 }}
@@ -28,6 +34,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
+  },
+  disabled: {
+    opacity: 0.6,
   },
   text: {
     color: "#00297A",

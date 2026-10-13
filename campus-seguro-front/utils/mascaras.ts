@@ -24,6 +24,21 @@ export function formatDateBR(value: string): string {
   return numbers.replace(/(\d{2})(\d{2})(\d+)/, "$1/$2/$3");
 }
 
+/**
+ * Converte uma data "DD/MM/AAAA" para o formato ISO "AAAA-MM-DD"
+ * esperado pelo backend (pydantic `date`). Retorna null se incompleta.
+ */
+export function dataBRParaISO(value: string): string | null {
+  const numbers = value.replace(/\D/g, "");
+  if (numbers.length !== 8) return null;
+
+  const dia = numbers.slice(0, 2);
+  const mes = numbers.slice(2, 4);
+  const ano = numbers.slice(4, 8);
+
+  return `${ano}-${mes}-${dia}`;
+}
+
 export function formatCpf(value: string): string {
   const numbers = value.replace(/\D/g, "").slice(0, 11);
 
