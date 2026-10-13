@@ -59,7 +59,7 @@ export default function Etapa5Screen() {
       : "Fala infeliz e discriminatória com base na raça.";
 
   const anonimo =
-    typeof params.anonimo === "string" ? params.anonimo === "true" : true;
+    typeof params.anonimo === "string" ? params.anonimo === "true" : false;
 
   async function handleEnviarDenuncia() {
     if (enviando) return;

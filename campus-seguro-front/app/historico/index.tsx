@@ -4,8 +4,8 @@ import {
   useCampusSeguro,
 } from "@/contexts/CampusSeguroContext";
 import { Feather } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import {
   ScrollView,
   StatusBar,
@@ -89,9 +89,16 @@ function filtrar(relatos: Relato[], filtro: FiltroType, busca: string): Relato[]
 
 export default function HistoricoScreen() {
   const router = useRouter();
-  const { relatos, naoLidas } = useCampusSeguro();
+  const { relatos, naoLidas, recarregar } = useCampusSeguro();
   const [filtro, setFiltro] = useState<FiltroType>("todos");
   const [busca, setBusca] = useState("");
+
+  // Recarrega a lista do backend sempre que a tela de histórico abre
+  useFocusEffect(
+    useCallback(() => {
+      recarregar();
+    }, [recarregar])
+  );
 
   const lista = useMemo(
     () => filtrar(relatos, filtro, busca),

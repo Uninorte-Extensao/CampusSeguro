@@ -67,7 +67,7 @@ export default function Etapa3Screen() {
   );
 
   const [anonimo, setAnonimo] = useState(
-    typeof params.anonimo === "string" ? params.anonimo === "true" : true
+    typeof params.anonimo === "string" ? params.anonimo === "true" : false
   );
 
   function handleAvancar() {
