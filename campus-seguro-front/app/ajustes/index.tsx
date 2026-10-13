@@ -1,6 +1,6 @@
 import { Tabs } from "@/components/navegacao/Tabs";
 import { useRouter } from "expo-router";
-import { Alert, StatusBar, View } from "react-native";
+import { Alert, Platform, StatusBar, View } from "react-native";
 import {
   ConfigScreen,
   SectionTitle,
@@ -9,22 +9,38 @@ import {
 } from "../../components/configuracoes/ConfigTelaBase";
 import { useAuth } from "../../contexts/AuthContext";
 
+// Confirmação que funciona na web E no nativo.
+// (No react-native-web o Alert.alert não dispara o onPress dos botões.)
+function confirmar(titulo: string, mensagem: string): Promise<boolean> {
+  if (Platform.OS === "web") {
+    const ok =
+      typeof window !== "undefined" && typeof window.confirm === "function"
+        ? window.confirm(`${titulo}\n\n${mensagem}`)
+        : true;
+    return Promise.resolve(ok);
+  }
+
+  return new Promise((resolve) => {
+    Alert.alert(titulo, mensagem, [
+      { text: "Cancelar", style: "cancel", onPress: () => resolve(false) },
+      { text: "Sair", style: "destructive", onPress: () => resolve(true) },
+    ]);
+  });
+}
+
 export default function AjustesScreen() {
   const router = useRouter();
   const { sair } = useAuth();
 
-  function handleSair() {
-    Alert.alert("Sair da conta", "Deseja encerrar a sessão?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Sair",
-        style: "destructive",
-        onPress: async () => {
-          await sair();
-          router.replace("/auth/login");
-        },
-      },
-    ]);
+  async function handleSair() {
+    const confirmado = await confirmar(
+      "Sair da conta",
+      "Deseja encerrar a sessão?"
+    );
+    if (!confirmado) return;
+
+    await sair();
+    router.replace("/auth/login");
   }
 
   return (
