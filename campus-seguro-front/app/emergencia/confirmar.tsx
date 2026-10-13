@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle, Line, Rect } from "react-native-svg";
+import { criarOcorrencia } from "../../services/api";
 
 const SERVICO_INFO: Record<
   string,
@@ -101,6 +102,19 @@ export default function ConfirmarEmergencia() {
     SERVICO_INFO[servico ?? ""] ?? SERVICO_INFO.policia;
 
   async function handleConfirmar() {
+    // Registra o acionamento no histórico (não bloqueia a ligação se falhar)
+    try {
+      await criarOcorrencia({
+        tipo_incidente: `Emergência - ${info.titulo}`,
+        descricao: `Acionamento de emergência: ligação para ${info.titulo} (${info.numero}).`,
+        localizacao: "UniNorte – Campus Djalma Batista",
+        anonimo: false,
+        descricao_resumida: `Acionou ${info.titulo} (${info.numero})`,
+      });
+    } catch {
+      // Se o registro falhar, seguimos com a ligação mesmo assim.
+    }
+
     const url =
       Platform.OS === "ios" ? `telprompt:${info.numero}` : `tel:${info.numero}`;
 
