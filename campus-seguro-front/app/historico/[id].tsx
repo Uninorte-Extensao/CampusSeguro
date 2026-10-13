@@ -1,23 +1,20 @@
-import {
-  Relato,
-  StatusRelato,
-  useCampusSeguro,
-} from "@/contexts/CampusSeguroContext";
+import { StatusRelato, useCampusSeguro } from "@/contexts/CampusSeguroContext";
 import { Feather } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Image,
+  Linking,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-type FiltroType = "todos" | "ativos" | "emergencia" | "concluido";
+import { EvidenciaResponse, listarEvidencias } from "../../services/api";
 
 const STATUS_COR: Record<StatusRelato, string> = {
   ATIVO: "#ef4444",
@@ -26,274 +23,178 @@ const STATUS_COR: Record<StatusRelato, string> = {
   CONCLUÍDO: "#22c55e",
 };
 
-const STATUS_BG: Record<StatusRelato, string> = {
-  ATIVO: "rgba(239,68,68,0.12)",
-  "EM ANÁLISE": "rgba(245,158,11,0.12)",
-  "EM ATENDIMENTO": "rgba(59,130,246,0.12)",
-  CONCLUÍDO: "rgba(34,197,94,0.12)",
-};
-
-const STATUS_BORDA: Record<StatusRelato, string> = {
-  ATIVO: "rgba(239,68,68,0.35)",
-  "EM ANÁLISE": "rgba(245,158,11,0.35)",
-  "EM ATENDIMENTO": "rgba(59,130,246,0.35)",
-  CONCLUÍDO: "rgba(34,197,94,0.35)",
-};
-
-const FILTROS: { id: FiltroType; label: string }[] = [
-  { id: "todos", label: "Todos" },
-  { id: "ativos", label: "Ativos" },
-  { id: "emergencia", label: "Emergência" },
-  { id: "concluido", label: "Concluído" },
-];
-
-function normalizarTexto(value: string) {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-}
-
-function filtrar(relatos: Relato[], filtro: FiltroType, busca: string): Relato[] {
-  let lista = relatos;
-
-  if (filtro === "ativos") {
-    lista = lista.filter(
-      (relato) => relato.status === "ATIVO" || relato.status === "EM ANÁLISE"
-    );
-  } else if (filtro === "emergencia") {
-    lista = lista.filter(
-      (relato) =>
-        relato.tipo.toLowerCase().includes("emergencial") ||
-        relato.status === "ATIVO"
-    );
-  } else if (filtro === "concluido") {
-    lista = lista.filter((relato) => relato.status === "CONCLUÍDO");
-  }
-
-  if (busca.trim()) {
-    const termo = normalizarTexto(busca);
-
-    lista = lista.filter((relato) => {
-      const textoRelato = normalizarTexto(
-        `${relato.id} ${relato.tipo} ${relato.local} ${relato.descricao}`
-      );
-
-      return textoRelato.includes(termo);
-    });
-  }
-
-  return lista;
-}
-
-export default function HistoricoScreen() {
+export default function DetalheOcorrenciaScreen() {
   const router = useRouter();
-  const { relatos, naoLidas } = useCampusSeguro();
-  const [filtro, setFiltro] = useState<FiltroType>("todos");
-  const [busca, setBusca] = useState("");
+  const params = useLocalSearchParams();
+  const id = typeof params.id === "string" ? params.id : "";
 
-  const lista = useMemo(
-    () => filtrar(relatos, filtro, busca),
-    [relatos, filtro, busca]
-  );
+  const { buscarRelatoPorId } = useCampusSeguro();
+  const relato = buscarRelatoPorId(id);
+
+  const [evidencias, setEvidencias] = useState<EvidenciaResponse[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    let ativo = true;
+    (async () => {
+      if (!id) return;
+      setCarregando(true);
+      setErro(null);
+      try {
+        const lista = await listarEvidencias(id);
+        if (ativo) setEvidencias(lista);
+      } catch (e) {
+        if (ativo)
+          setErro(
+            e instanceof Error ? e.message : "Não foi possível carregar os anexos."
+          );
+      } finally {
+        if (ativo) setCarregando(false);
+      }
+    })();
+    return () => {
+      ativo = false;
+    };
+  }, [id]);
+
+  const corStatus = relato ? STATUS_COR[relato.status] : "#8D90A1";
 
   return (
-    <SafeAreaView style={s.container} edges={["top"]}>
-      <StatusBar
-        barStyle="light-content"
-        translucent
-        backgroundColor="transparent"
-      />
+    <SafeAreaView style={s.container} edges={["top", "bottom"]}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      <ScrollView
-        contentContainerStyle={s.scroll}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+        {/* Header */}
         <View style={s.header}>
-          <TouchableOpacity
-            style={s.backBtn}
-            onPress={() => router.back()}
-            activeOpacity={0.8}
-          >
+          <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.8}>
             <Feather name="arrow-left" size={20} color="#C9D3FF" />
           </TouchableOpacity>
+          <Text style={s.headerTitle}>Detalhes da ocorrência</Text>
+          <View style={{ width: 36 }} />
+        </View>
 
-          <View style={s.headerLeft}>
-            <Text style={s.headerTitle}>Histórico</Text>
-            <Text style={s.headerSub}>
-              Acompanhe todos os relatos de incidentes e atividades de segurança
-              no campus.
+        {!relato ? (
+          <View style={s.card}>
+            <Text style={s.semDados}>
+              Não encontramos os dados dessa ocorrência na lista. Volte ao
+              histórico e tente novamente.
             </Text>
           </View>
-
-          <View style={s.headerIcons}>
-            <TouchableOpacity
-              style={s.notificacaoBtn}
-              onPress={() => router.push("/notificacoes")}
-              activeOpacity={0.7}
-            >
-              <Feather name="bell" size={20} color="#C9D3FF" />
-              {naoLidas > 0 && <View style={s.headerBadge} />}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={s.avatarCircle}
-              onPress={() => router.push("/ajustes")}
-              activeOpacity={0.8}
-            >
-              <Feather name="user" size={16} color="#C9D3FF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={s.searchWrap}>
-          <Feather name="search" size={16} color="#454D66" />
-
-          <TextInput
-            style={s.searchInput}
-            placeholder="Buscar por local, tipo ou protocolo..."
-            placeholderTextColor="#454D66"
-            value={busca}
-            onChangeText={setBusca}
-            autoCorrect={false}
-          />
-
-          {busca.length > 0 && (
-            <TouchableOpacity onPress={() => setBusca("")}>
-              <Feather name="x" size={16} color="#454D66" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.filtrosRow}
-        >
-          {FILTROS.map((filtroItem) => {
-            const ativo = filtro === filtroItem.id;
-
-            return (
-              <TouchableOpacity
-                key={filtroItem.id}
-                style={[s.filtroChip, ativo && s.filtroChipAtivo]}
-                onPress={() => setFiltro(filtroItem.id)}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.filtroText, ativo && s.filtroTextAtivo]}>
-                  {filtroItem.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        <View style={s.lista}>
-          {lista.length === 0 ? (
-            <View style={s.vazio}>
-              <Feather name="inbox" size={40} color="#30364B" />
-              <Text style={s.vazioText}>Nenhum relato encontrado</Text>
-            </View>
-          ) : (
-            lista.map((relato) => (
-              <View
-                key={relato.id}
-                style={[
-                  s.card,
-                  {
-                    borderLeftColor: STATUS_COR[relato.status],
-                    borderLeftWidth: 3,
-                  },
-                ]}
-              >
-                <View style={s.cardTop}>
-                  <View style={s.cardIconWrap}>
-                    <Feather name={relato.icone} size={20} color="#C9D3FF" />
-                  </View>
-
-                  <View style={s.cardInfo}>
-                    <Text style={s.cardTipo}>{relato.tipo}</Text>
-                    <Text style={s.cardId}>ID: #{relato.id}</Text>
-                  </View>
-
-                  <View
-                    style={[
-                      s.statusBadge,
-                      {
-                        backgroundColor: STATUS_BG[relato.status],
-                        borderColor: STATUS_BORDA[relato.status],
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        s.statusText,
-                        { color: STATUS_COR[relato.status] },
-                      ]}
-                    >
-                      {relato.status}
-                    </Text>
-                  </View>
+        ) : (
+          <>
+            {/* Cabeçalho da ocorrência */}
+            <View style={s.card}>
+              <View style={s.topo}>
+                <View style={s.iconeWrap}>
+                  <Feather name={relato.icone} size={22} color="#C9D3FF" />
                 </View>
-
-                <View style={s.cardMeta}>
-                  <View style={s.metaItem}>
-                    <Feather name="map-pin" size={12} color="#8D90A1" />
-                    <Text style={s.metaText}>{relato.local}</Text>
-                  </View>
-
-                  <View style={s.metaItem}>
-                    <Feather name="clock" size={12} color="#8D90A1" />
-                    <Text style={s.metaText}>
-                      {relato.data}, {relato.hora}
-                    </Text>
-                  </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.tipo}>{relato.tipo}</Text>
+                  <Text style={s.protocolo}>ID: #{relato.id}</Text>
                 </View>
-
-                <TouchableOpacity
-                  style={s.detalhesBtn}
-                  activeOpacity={0.8}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/historico/[id]",
-                      params: { id: relato.id },
-                    })
-                  }
-                >
-                  <Text style={s.detalhesBtnText}>VER DETALHES</Text>
-                </TouchableOpacity>
+                <View style={[s.badge, { borderColor: corStatus }]}>
+                  <Text style={[s.badgeText, { color: corStatus }]}>{relato.status}</Text>
+                </View>
               </View>
-            ))
-          )}
-        </View>
 
-        <View style={{ height: 100 }} />
+              <Linha icone="map-pin" label="Local" valor={relato.local} />
+              <Linha icone="clock" label="Data" valor={`${relato.data}, ${relato.hora}`} />
+
+              <View style={s.descBox}>
+                <Text style={s.descLabel}>DESCRIÇÃO</Text>
+                <Text style={s.descText}>{relato.descricao || "Sem descrição."}</Text>
+              </View>
+            </View>
+
+            {/* Evidências */}
+            <View style={s.card}>
+              <Text style={s.secaoTitulo}>Evidências anexadas</Text>
+
+              {carregando ? (
+                <View style={s.centro}>
+                  <ActivityIndicator color="#40DBD5" />
+                </View>
+              ) : erro ? (
+                <Text style={s.erroText}>{erro}</Text>
+              ) : evidencias.length === 0 ? (
+                <View style={s.centro}>
+                  <Feather name="paperclip" size={28} color="#30364B" />
+                  <Text style={s.semAnexo}>Nenhum anexo nesta ocorrência.</Text>
+                </View>
+              ) : (
+                <View style={{ gap: 12 }}>
+                  {evidencias.map((ev) =>
+                    ev.tipo_midia === "Foto" ? (
+                      <TouchableOpacity
+                        key={ev.id}
+                        activeOpacity={0.9}
+                        onPress={() => Linking.openURL(ev.url)}
+                      >
+                        <Image source={{ uri: ev.url }} style={s.imagem} resizeMode="cover" />
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        key={ev.id}
+                        style={s.arquivoItem}
+                        activeOpacity={0.8}
+                        onPress={() => Linking.openURL(ev.url)}
+                      >
+                        <Feather
+                          name={
+                            ev.tipo_midia === "Vídeo"
+                              ? "video"
+                              : ev.tipo_midia === "Áudio"
+                              ? "mic"
+                              : "file-text"
+                          }
+                          size={18}
+                          color="#40DBD5"
+                        />
+                        <Text style={s.arquivoTexto}>Abrir {ev.tipo_midia.toLowerCase()}</Text>
+                        <Feather name="external-link" size={16} color="#8D90A1" />
+                      </TouchableOpacity>
+                    )
+                  )}
+                </View>
+              )}
+            </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const s = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0B1020",
-  },
+function Linha({
+  icone,
+  label,
+  valor,
+}: {
+  icone: React.ComponentProps<typeof Feather>["name"];
+  label: string;
+  valor: string;
+}) {
+  return (
+    <View style={s.linha}>
+      <Feather name={icone} size={14} color="#8D90A1" />
+      <Text style={s.linhaLabel}>{label}:</Text>
+      <Text style={s.linhaValor} numberOfLines={2}>
+        {valor}
+      </Text>
+    </View>
+  );
+}
 
-  scroll: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 16,
-    gap: 16,
-  },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#0B1020" },
+  scroll: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 28, gap: 16 },
 
   header: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
   },
-
   backBtn: {
     width: 36,
     height: 36,
@@ -303,144 +204,20 @@ const s = StyleSheet.create({
     borderColor: "#1F2638",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 2,
   },
-
-  headerLeft: {
-    flex: 1,
-    gap: 6,
-  },
-
-  headerTitle: {
-    color: "#EAF0FF",
-    fontSize: 28,
-    fontWeight: "900",
-  },
-
-  headerSub: {
-    color: "#8D90A1",
-    fontSize: 13,
-    lineHeight: 19,
-  },
-
-  headerIcons: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    paddingTop: 4,
-  },
-
-  notificacaoBtn: {
-    width: 34,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-
-  headerBadge: {
-    position: "absolute",
-    top: 6,
-    right: 5,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#ef4444",
-    borderWidth: 2,
-    borderColor: "#0B1020",
-  },
-
-  avatarCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "#30364B",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  searchWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: "#171D2E",
-    borderWidth: 1,
-    borderColor: "#1F2638",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    height: 48,
-  },
-
-  searchInput: {
-    flex: 1,
-    color: "#EAF0FF",
-    fontSize: 14,
-  },
-
-  filtrosRow: {
-    gap: 8,
-    paddingRight: 4,
-  },
-
-  filtroChip: {
-    paddingHorizontal: 18,
-    height: 36,
-    borderRadius: 999,
-    backgroundColor: "#171D2E",
-    borderWidth: 1,
-    borderColor: "#1F2638",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  filtroChipAtivo: {
-    backgroundColor: "#2563EB",
-    borderColor: "#2563EB",
-  },
-
-  filtroText: {
-    color: "#8D90A1",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-  filtroTextAtivo: {
-    color: "#fff",
-    fontWeight: "700",
-  },
-
-  lista: {
-    gap: 14,
-  },
-
-  vazio: {
-    alignItems: "center",
-    paddingVertical: 48,
-    gap: 12,
-  },
-
-  vazioText: {
-    color: "#454D66",
-    fontSize: 14,
-    fontWeight: "600",
-  },
+  headerTitle: { color: "#EAF0FF", fontSize: 15, fontWeight: "800" },
 
   card: {
     backgroundColor: "#171D2E",
     borderWidth: 1,
-    borderColor: "#1F2638",
+    borderColor: "#26304A",
     borderRadius: 20,
     padding: 16,
-    gap: 12,
+    gap: 14,
   },
 
-  cardTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-
-  cardIconWrap: {
+  topo: { flexDirection: "row", alignItems: "center", gap: 12 },
+  iconeWrap: {
     width: 44,
     height: 44,
     borderRadius: 14,
@@ -448,67 +225,56 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  tipo: { color: "#EAF0FF", fontSize: 15, fontWeight: "800" },
+  protocolo: { color: "#8D90A1", fontSize: 12, marginTop: 2 },
 
-  cardInfo: {
-    flex: 1,
-    gap: 3,
-  },
+  badge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  badgeText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
 
-  cardTipo: {
-    color: "#EAF0FF",
-    fontSize: 14,
-    fontWeight: "700",
-    flexShrink: 1,
-  },
+  linha: { flexDirection: "row", alignItems: "center", gap: 6 },
+  linhaLabel: { color: "#8D90A1", fontSize: 13, fontWeight: "700" },
+  linhaValor: { color: "#EAF0FF", fontSize: 13, flex: 1 },
 
-  cardId: {
-    color: "#8D90A1",
-    fontSize: 12,
-  },
-
-  statusBadge: {
+  descBox: {
+    backgroundColor: "#0F1728",
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    borderColor: "#26304A",
+    borderRadius: 14,
+    padding: 12,
   },
-
-  statusText: {
+  descLabel: {
+    color: "#8EA0C7",
     fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.5,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  descText: { color: "#EAF0FF", fontSize: 14, lineHeight: 20 },
+
+  secaoTitulo: { color: "#EAF0FF", fontSize: 15, fontWeight: "800" },
+
+  centro: { alignItems: "center", paddingVertical: 20, gap: 10 },
+  semAnexo: { color: "#454D66", fontSize: 13, fontWeight: "600" },
+  semDados: { color: "#AAB4C8", fontSize: 14, lineHeight: 20 },
+  erroText: { color: "#FF6B6B", fontSize: 13, lineHeight: 19 },
+
+  imagem: {
+    width: "100%",
+    height: 200,
+    borderRadius: 14,
+    backgroundColor: "#0F1728",
   },
 
-  cardMeta: {
-    gap: 6,
-  },
-
-  metaItem: {
+  arquivoItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-  },
-
-  metaText: {
-    color: "#8D90A1",
-    fontSize: 12,
-    flexShrink: 1,
-  },
-
-  detalhesBtn: {
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: "#0B1020",
+    gap: 12,
+    backgroundColor: "#0F1728",
     borderWidth: 1,
-    borderColor: "#1F2638",
-    alignItems: "center",
-    justifyContent: "center",
+    borderColor: "#26304A",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
-
-  detalhesBtnText: {
-    color: "#C9D3FF",
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 0.8,
-  },
+  arquivoTexto: { flex: 1, color: "#EAF0FF", fontSize: 14, fontWeight: "700" },
 });

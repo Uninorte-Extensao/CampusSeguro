@@ -270,9 +270,32 @@ export type TipoMidia = "Foto" | "Vídeo" | "Áudio" | "Documento";
 
 export interface EvidenciaUpload {
   uri: string;
+  // Na web capturamos o Blob no momento da escolha do arquivo, porque a URI
+  // (blob:/data:) pode expirar ao navegar entre telas. No nativo usamos a uri.
+  blob?: Blob | null;
   name: string;
   mimeType?: string | null;
   tipoMidia: TipoMidia;
+}
+
+export interface EvidenciaResponse {
+  id: string;
+  tipo_midia: TipoMidia;
+  url: string;
+}
+
+/** Lista as evidências (com URL absoluta) de uma ocorrência. */
+export async function listarEvidencias(
+  ocorrenciaId: string
+): Promise<EvidenciaResponse[]> {
+  const lista = await request<EvidenciaResponse[]>(
+    `/ocorrencias/${ocorrenciaId}/evidencias`,
+    { method: "GET" }
+  );
+  return lista.map((e) => ({
+    ...e,
+    url: e.url.startsWith("http") ? e.url : `${API_BASE_URL}${e.url}`,
+  }));
 }
 
 /**
@@ -285,8 +308,11 @@ export async function enviarEvidencia(
 ): Promise<void> {
   const form = new FormData();
 
-  if (Platform.OS === "web") {
-    // Na web o uri é um blob:/data: — buscamos o Blob real para enviar.
+  if (ev.blob) {
+    // Web: usamos o Blob capturado no momento da escolha (mais confiável).
+    form.append("arquivo", ev.blob, ev.name);
+  } else if (Platform.OS === "web") {
+    // Fallback web: tenta buscar o Blob a partir da uri.
     const resp = await fetch(ev.uri);
     const blob = await resp.blob();
     form.append("arquivo", blob, ev.name);

@@ -13,7 +13,13 @@ from models import Ocorrencia, StatusOcorrencia, Usuario, AtualizacaoOcorrencia,
 from schemas import (Token, UsuarioCreate, UsuarioResponse, UsuarioComToken, OcorrenciaCreate, OcorrenciaUpdate, EvidenciaCreate, AtualizacaoCreate, RelatoRequest)
 
 from fastapi import File, UploadFile, Form
-from bucket import deletar_arquivo_bucket, fazer_upload_arquivo
+from fastapi.staticfiles import StaticFiles
+from bucket import (
+    deletar_arquivo_bucket,
+    fazer_upload_arquivo,
+    url_publica,
+    PASTA_UPLOADS_LOCAL,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from passlib.context import CryptContext
 from dotenv import load_dotenv
@@ -70,6 +76,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve os anexos salvos localmente (fallback quando o R2 não está configurado)
+os.makedirs(PASTA_UPLOADS_LOCAL, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=PASTA_UPLOADS_LOCAL), name="uploads")
 
 @app.on_event("startup")
 def on_startup():
@@ -383,6 +393,34 @@ def adicionar_evidencia(
             detail=f"Erro ao salvar no banco. O arquivo foi removido do storage para manter a integridade. Erro: {str(db_error)}"
         )
     
+@app.get("/ocorrencias/{ocorrencia_id}/evidencias", tags=["Detalhes Ocorrência"])
+def listar_evidencias(
+    ocorrencia_id: UUID,
+    session: Session = Depends(get_session),
+    usuario_atual: Usuario = Depends(get_usuario_atual)
+):
+    """Lista as evidências (com URL de acesso) de uma ocorrência."""
+    ocorrencia = session.get(Ocorrencia, ocorrencia_id)
+    if not ocorrencia:
+        raise HTTPException(status_code=404, detail="Ocorrência não encontrada")
+
+    if usuario_atual.tipo_perfil != TipoPerfil.ADMINISTRADOR and ocorrencia.usuario_id != usuario_atual.id:
+        raise HTTPException(status_code=403, detail="Acesso negado. Esta ocorrência pertence a outro usuário.")
+
+    evidencias = session.exec(
+        select(Evidencia).where(Evidencia.ocorrencia_id == ocorrencia_id)
+    ).all()
+
+    return [
+        {
+            "id": str(e.id),
+            "tipo_midia": e.tipo_midia,
+            "url": url_publica(e.caminho_salvo),
+        }
+        for e in evidencias
+    ]
+
+
 @app.post("/ocorrencias/{ocorrencia_id}/atualizacoes", status_code=201, tags=["Detalhes Ocorrência"])
 def adicionar_atualizacao_linha_do_tempo(
     ocorrencia_id: UUID,

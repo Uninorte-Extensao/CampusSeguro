@@ -5,7 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
-  Alert,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -14,8 +14,28 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useCampusSeguro } from "../../contexts/CampusSeguroContext";
 import type { EvidenciaUpload, TipoMidia } from "../../services/api";
 import { alerta } from "../../utils/alerta";
+
+// Na web, captura o Blob do arquivo na hora da escolha (a uri pode expirar
+// ao navegar entre telas). No nativo, basta a uri.
+async function construirAnexo(
+  uri: string,
+  name: string,
+  mimeType: string | null | undefined,
+  tipoMidia: TipoMidia
+): Promise<EvidenciaUpload> {
+  let blob: Blob | null = null;
+  if (Platform.OS === "web") {
+    try {
+      blob = await (await fetch(uri)).blob();
+    } catch {
+      blob = null;
+    }
+  }
+  return { uri, blob, name, mimeType, tipoMidia };
+}
 
 type EvidenceType = "foto" | "video" | "arquivo" | "audio";
 
@@ -35,6 +55,7 @@ export default function Etapa4Screen() {
   const router = useRouter();
   // Dados que vieram da etapa 3 (tipo, local, agressor, resumo, etc.)
   const params = useLocalSearchParams();
+  const { definirAnexosPendentes } = useCampusSeguro();
   const [anexos, setAnexos] = useState<EvidenciaUpload[]>([]);
 
   function adicionarAnexo(anexo: EvidenciaUpload) {
@@ -65,12 +86,9 @@ export default function Etapa4Screen() {
 
       const a = resultado.assets[0];
       const fallbackExt = tipo === "Foto" ? "jpg" : "mp4";
-      adicionarAnexo({
-        uri: a.uri,
-        name: a.fileName || `${tipo.toLowerCase()}-${Date.now()}.${fallbackExt}`,
-        mimeType: a.mimeType,
-        tipoMidia: tipo,
-      });
+      const nome =
+        a.fileName || `${tipo.toLowerCase()}-${Date.now()}.${fallbackExt}`;
+      adicionarAnexo(await construirAnexo(a.uri, nome, a.mimeType, tipo));
     } catch {
       alerta("Erro", "Não foi possível abrir a galeria.");
     }
@@ -86,12 +104,8 @@ export default function Etapa4Screen() {
       if (resultado.canceled || !resultado.assets?.length) return;
 
       const a = resultado.assets[0];
-      adicionarAnexo({
-        uri: a.uri,
-        name: a.name || `${tipo.toLowerCase()}-${Date.now()}`,
-        mimeType: a.mimeType,
-        tipoMidia: tipo,
-      });
+      const nome = a.name || `${tipo.toLowerCase()}-${Date.now()}`;
+      adicionarAnexo(await construirAnexo(a.uri, nome, a.mimeType, tipo));
     } catch {
       alerta("Erro", "Não foi possível abrir os arquivos.");
     }
@@ -105,13 +119,14 @@ export default function Etapa4Screen() {
   }
 
   function handleAvancar() {
+    // Guarda os anexos no contexto (não dá pra serializar Blob em params,
+    // e passar data: URIs pela URL quebra no celular).
+    definirAnexosPendentes(anexos);
     router.push({
       pathname: "/report/etapa5",
       params: {
         // Repassa tudo que foi preenchido nas etapas anteriores
         ...params,
-        // Anexos serializados; a etapa 5 faz o upload após criar a ocorrência
-        anexos: JSON.stringify(anexos),
       },
     });
   }

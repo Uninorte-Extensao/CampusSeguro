@@ -24,7 +24,8 @@ import { alerta } from "../../utils/alerta";
 export default function Etapa5Screen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { recarregar } = useCampusSeguro();
+  const { recarregar, anexosPendentes, limparAnexosPendentes } =
+    useCampusSeguro();
   const [enviando, setEnviando] = useState(false);
 
   const tipoAgressao =
@@ -76,25 +77,16 @@ export default function Etapa5Screen() {
         descricao_resumida: resumo.slice(0, 120),
       });
 
-      // Envia os anexos escolhidos na etapa 4 (se houver)
+      // Envia os anexos escolhidos na etapa 4 (guardados no contexto)
       let falhasAnexo = 0;
-      const anexosRaw = typeof params.anexos === "string" ? params.anexos : "";
-      if (anexosRaw) {
-        let anexos: EvidenciaUpload[] = [];
+      for (const anexo of anexosPendentes) {
         try {
-          anexos = JSON.parse(anexosRaw);
+          await enviarEvidencia(ocorrencia.id, anexo);
         } catch {
-          anexos = [];
-        }
-
-        for (const anexo of anexos) {
-          try {
-            await enviarEvidencia(ocorrencia.id, anexo);
-          } catch {
-            falhasAnexo += 1;
-          }
+          falhasAnexo += 1;
         }
       }
+      limparAnexosPendentes();
 
       // Atualiza o histórico com os dados reais do backend
       await recarregar();

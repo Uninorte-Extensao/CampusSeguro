@@ -9,6 +9,7 @@ import {
     useState,
 } from "react";
 import {
+    EvidenciaUpload,
     listarOcorrencias,
     Ocorrencia,
     StatusOcorrencia,
@@ -53,9 +54,12 @@ interface CampusSeguroContextData {
   naoLidas: number;
   carregandoRelatos: boolean;
   erroRelatos: string | null;
+  anexosPendentes: EvidenciaUpload[];
   buscarRelatoPorId: (id?: string | null) => Relato | undefined;
   adicionarRelato: (relato: NovoRelato) => Relato;
   recarregar: () => Promise<void>;
+  definirAnexosPendentes: (anexos: EvidenciaUpload[]) => void;
+  limparAnexosPendentes: () => void;
   marcarNotificacaoLida: (id: string) => void;
   marcarTodasNotificacoesLidas: () => void;
 }
@@ -135,6 +139,14 @@ export function CampusSeguroProvider({ children }: { children: ReactNode }) {
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
   const [carregandoRelatos, setCarregandoRelatos] = useState(false);
   const [erroRelatos, setErroRelatos] = useState<string | null>(null);
+  // Anexos escolhidos na etapa 4, enviados ao backend pela etapa 5
+  const [anexosPendentes, setAnexosPendentes] = useState<EvidenciaUpload[]>([]);
+
+  const definirAnexosPendentes = useCallback(
+    (anexos: EvidenciaUpload[]) => setAnexosPendentes(anexos),
+    []
+  );
+  const limparAnexosPendentes = useCallback(() => setAnexosPendentes([]), []);
 
   const naoLidas = useMemo(
     () => notificacoes.filter((notificacao) => !notificacao.lida).length,
@@ -227,9 +239,12 @@ export function CampusSeguroProvider({ children }: { children: ReactNode }) {
       naoLidas,
       carregandoRelatos,
       erroRelatos,
+      anexosPendentes,
       buscarRelatoPorId,
       adicionarRelato,
       recarregar,
+      definirAnexosPendentes,
+      limparAnexosPendentes,
       marcarNotificacaoLida,
       marcarTodasNotificacoesLidas,
     }),
@@ -239,9 +254,12 @@ export function CampusSeguroProvider({ children }: { children: ReactNode }) {
       naoLidas,
       carregandoRelatos,
       erroRelatos,
+      anexosPendentes,
       buscarRelatoPorId,
       adicionarRelato,
       recarregar,
+      definirAnexosPendentes,
+      limparAnexosPendentes,
       marcarNotificacaoLida,
       marcarTodasNotificacoesLidas,
     ]

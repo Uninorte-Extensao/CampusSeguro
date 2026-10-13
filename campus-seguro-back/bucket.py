@@ -47,6 +47,17 @@ def _exigir_r2():
             "R2_BUCKET_NAME no arquivo .env para habilitar o upload de evidências."
         )
 
+def url_publica(key: str) -> str:
+    """
+    Retorna uma URL para acessar o arquivo salvo.
+    - Com R2: link temporário assinado.
+    - Local: caminho relativo servido pelo FastAPI em /uploads/<key>.
+    """
+    if R2_CONFIGURADO:
+        return gerar_link_seguro(key)
+    return f"/uploads/{key}"
+
+
 def gerar_link_seguro(caminho_arquivo: str):
     """Gera um link que se autodestrói em 1 hora"""
     _exigir_r2()
