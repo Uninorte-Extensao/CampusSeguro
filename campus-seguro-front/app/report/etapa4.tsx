@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { EvidenciaUpload, TipoMidia } from "../../services/api";
+import { alerta } from "../../utils/alerta";
 
 type EvidenceType = "foto" | "video" | "arquivo" | "audio";
 
@@ -48,7 +49,7 @@ export default function Etapa4Screen() {
     try {
       const permissao = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissao.granted) {
-        Alert.alert(
+        alerta(
           "Permissão necessária",
           "Permita o acesso à galeria para anexar."
         );
@@ -71,7 +72,7 @@ export default function Etapa4Screen() {
         tipoMidia: tipo,
       });
     } catch {
-      Alert.alert("Erro", "Não foi possível abrir a galeria.");
+      alerta("Erro", "Não foi possível abrir a galeria.");
     }
   }
 
@@ -92,7 +93,7 @@ export default function Etapa4Screen() {
         tipoMidia: tipo,
       });
     } catch {
-      Alert.alert("Erro", "Não foi possível abrir os arquivos.");
+      alerta("Erro", "Não foi possível abrir os arquivos.");
     }
   }
 

@@ -26,6 +26,7 @@ import PeopleIcon from "../../assets/icons/people.svg";
 import UserIcon from "../../assets/icons/user.svg";
 import GradientButton from "../../components/ui/BotaoGradiente";
 import { useAuth } from "../../contexts/AuthContext";
+import { alerta } from "../../utils/alerta";
 import {
   dataBRParaISO,
   formatCpf,
@@ -68,7 +69,7 @@ export default function CadastroCompletoScreen() {
 
   async function handleCadastroCompleto() {
     if (!nomeCompleto.trim() || !email.trim() || !cpf.trim() || !senha) {
-      Alert.alert(
+      alerta(
         "Campos obrigatórios",
         "Preencha nome, e-mail, CPF e senha para continuar."
       );
@@ -76,12 +77,12 @@ export default function CadastroCompletoScreen() {
     }
 
     if (senha !== confirmarSenha) {
-      Alert.alert("Senhas diferentes", "A confirmação de senha não confere.");
+      alerta("Senhas diferentes", "A confirmação de senha não confere.");
       return;
     }
 
     if (!aceitouTermos) {
-      Alert.alert(
+      alerta(
         "Termos obrigatórios",
         "Você precisa concordar com os termos para continuar."
       );
@@ -104,7 +105,7 @@ export default function CadastroCompletoScreen() {
       });
       router.replace("../home/home");
     } catch (error) {
-      Alert.alert(
+      alerta(
         "Não foi possível cadastrar",
         error instanceof Error ? error.message : "Tente novamente."
       );

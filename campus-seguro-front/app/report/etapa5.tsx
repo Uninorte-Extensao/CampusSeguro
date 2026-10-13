@@ -19,6 +19,7 @@ import {
   enviarEvidencia,
   EvidenciaUpload,
 } from "../../services/api";
+import { alerta } from "../../utils/alerta";
 
 export default function Etapa5Screen() {
   const router = useRouter();
@@ -99,7 +100,7 @@ export default function Etapa5Screen() {
       await recarregar();
 
       if (falhasAnexo > 0) {
-        Alert.alert(
+        alerta(
           "Denúncia registrada",
           `Sua denúncia foi registrada, mas ${falhasAnexo} anexo(s) não puderam ser enviados.`
         );
@@ -121,7 +122,7 @@ export default function Etapa5Screen() {
         },
       });
     } catch (error) {
-      Alert.alert(
+      alerta(
         "Não foi possível enviar",
         error instanceof Error
           ? error.message

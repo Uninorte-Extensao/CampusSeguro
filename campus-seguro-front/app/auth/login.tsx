@@ -24,6 +24,7 @@ import LockIcon from "../../assets/icons/lock.svg";
 import RaioIcon from "../../assets/icons/raio2.svg";
 import GradientButton from "../../components/ui/BotaoGradiente";
 import { useAuth } from "../../contexts/AuthContext";
+import { alerta } from "../../utils/alerta";
 import { formatEmailOrCpf, isCpfLike } from "../../utils/mascaras";
 
 export default function LoginScreen() {
@@ -40,7 +41,7 @@ export default function LoginScreen() {
 
   async function handleLogin() {
     if (!emailOrCpf.trim() || !senha) {
-      Alert.alert("Campos obrigatórios", "Informe seu e-mail/CPF e a senha.");
+      alerta("Campos obrigatórios", "Informe seu e-mail/CPF e a senha.");
       return;
     }
 
@@ -49,7 +50,7 @@ export default function LoginScreen() {
       await entrar(emailOrCpf.trim(), senha);
       router.replace("../home/home");
     } catch (error) {
-      Alert.alert(
+      alerta(
         "Não foi possível entrar",
         error instanceof Error ? error.message : "Tente novamente."
       );
@@ -72,7 +73,7 @@ export default function LoginScreen() {
 
   function handleEnviarLinkRecuperacao() {
     if (!emailRecuperacao.trim() || !emailRecuperacao.includes("@")) {
-      Alert.alert("E-mail inválido", "Por favor, insira um e-mail válido.");
+      alerta("E-mail inválido", "Por favor, insira um e-mail válido.");
       return;
     }
     setLinkEnviado(true);

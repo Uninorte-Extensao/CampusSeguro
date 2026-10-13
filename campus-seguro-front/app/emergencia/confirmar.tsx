@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle, Line, Rect } from "react-native-svg";
 import { criarOcorrencia } from "../../services/api";
+import { alerta } from "../../utils/alerta";
 
 const SERVICO_INFO: Record<
   string,
@@ -121,7 +122,7 @@ export default function ConfirmarEmergencia() {
     try {
       const podeAbrir = await Linking.canOpenURL(url);
       if (!podeAbrir) {
-        Alert.alert(
+        alerta(
           "Não foi possível ligar",
           `Disque manualmente: ${info.numero}`
         );
@@ -129,7 +130,7 @@ export default function ConfirmarEmergencia() {
       }
       await Linking.openURL(url);
     } catch {
-      Alert.alert(
+      alerta(
         "Erro ao iniciar chamada",
         `Disque manualmente: ${info.numero}`
       );

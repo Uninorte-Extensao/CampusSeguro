@@ -10,6 +10,7 @@ import UserIcon from "../../assets/icons/user.svg";
 import GradientButton from "../../components/ui/BotaoGradiente";
 import { tokens } from "../../constants/theme";
 import { useAuth } from "../../contexts/AuthContext";
+import { alerta } from "../../utils/alerta";
 import { dataBRParaISO, formatDateBR, sanitizeFullName } from "../../utils/mascaras";
 
 export default function CadastroRapidoScreen() {
@@ -23,12 +24,12 @@ export default function CadastroRapidoScreen() {
 
   async function handleCadastroRapido() {
     if (!nome.trim()) {
-      Alert.alert("Nome obrigatório", "Informe seu nome completo para continuar.");
+      alerta("Nome obrigatório", "Informe seu nome completo para continuar.");
       return;
     }
 
     if (!aceitouTermos) {
-      Alert.alert(
+      alerta(
         "Termos obrigatórios",
         "Você precisa concordar com os termos para continuar."
       );
@@ -44,7 +45,7 @@ export default function CadastroRapidoScreen() {
       });
       router.replace("../home/home_visitante");
     } catch (error) {
-      Alert.alert(
+      alerta(
         "Não foi possível cadastrar",
         error instanceof Error ? error.message : "Tente novamente."
       );

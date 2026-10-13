@@ -23,6 +23,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { alerta } from "../../utils/alerta";
 
 export default function Etapa1Screen() {
   const router = useRouter();
@@ -57,7 +58,7 @@ export default function Etapa1Screen() {
       setTemPermissaoMicrofone(permissao.granted);
 
       if (!permissao.granted) {
-        Alert.alert(
+        alerta(
           "Permissão necessária",
           "Para gravar um relato por áudio, permita o acesso ao microfone."
         );
@@ -72,7 +73,7 @@ export default function Etapa1Screen() {
     } catch (error) {
       console.log("Erro ao configurar áudio:", error);
 
-      Alert.alert(
+      alerta(
         "Erro no áudio",
         "Não foi possível preparar o microfone para gravação."
       );
@@ -86,7 +87,7 @@ export default function Etapa1Screen() {
       setTemPermissaoMicrofone(permissao.granted);
 
       if (!permissao.granted) {
-        Alert.alert(
+        alerta(
           "Microfone bloqueado",
           "Você precisa permitir o uso do microfone para gravar áudio."
         );
@@ -103,7 +104,7 @@ export default function Etapa1Screen() {
     } catch (error) {
       console.log("Erro ao solicitar permissão:", error);
 
-      Alert.alert(
+      alerta(
         "Erro no microfone",
         "Não foi possível solicitar permissão para usar o microfone."
       );
@@ -137,7 +138,7 @@ export default function Etapa1Screen() {
     } catch (error) {
       console.log("Erro ao iniciar gravação:", error);
 
-      Alert.alert(
+      alerta(
         "Erro ao gravar",
         "Não foi possível iniciar a gravação do áudio."
       );
@@ -157,7 +158,7 @@ export default function Etapa1Screen() {
       const uri = audioRecorder.uri;
 
       if (!uri) {
-        Alert.alert(
+        alerta(
           "Áudio não encontrado",
           "A gravação foi encerrada, mas o arquivo de áudio não foi localizado."
         );
@@ -169,7 +170,7 @@ export default function Etapa1Screen() {
     } catch (error) {
       console.log("Erro ao parar gravação:", error);
 
-      Alert.alert(
+      alerta(
         "Erro ao salvar áudio",
         "Não foi possível finalizar a gravação do áudio."
       );
