@@ -124,6 +124,17 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.acaoLabel}>Histórico</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.acaoCard}
+              activeOpacity={0.85}
+              onPress={() => router.push("/minhas-denuncias" as any)}
+            >
+              <View style={styles.acaoIconPolicia}>
+                <Feather name="message-circle" size={34} color="#40DBD5" />
+              </View>
+              <Text style={styles.acaoLabel}>Minhas denúncias</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>

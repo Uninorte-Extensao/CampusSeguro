@@ -262,10 +262,7 @@ export default function HistoricoScreen() {
                   style={s.detalhesBtn}
                   activeOpacity={0.8}
                   onPress={() =>
-                    router.push({
-                      pathname: "/historico/[id]",
-                      params: { id: relato.id },
-                    })
+                    router.push(`/historico/${relato.id}` as any)
                   }
                 >
                   <Text style={s.detalhesBtnText}>VER DETALHES</Text>

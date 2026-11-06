@@ -111,6 +111,7 @@ export default function ConfirmarEmergencia() {
         localizacao: "UniNorte – Campus Djalma Batista",
         anonimo: false,
         descricao_resumida: `Acionou ${info.titulo} (${info.numero})`,
+        gravidade: "Crítica",
       });
     } catch {
       // Se o registro falhar, seguimos com a ligação mesmo assim.

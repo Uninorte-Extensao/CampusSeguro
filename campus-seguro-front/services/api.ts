@@ -63,6 +63,10 @@ export interface Ocorrencia {
   status: StatusOcorrencia;
   data_criacao: string;
   responsavel_id?: string | null;
+  gravidade?: string | null;
+  data_resolucao?: string | null;
+  /** Só na criação de denúncia anônima: permite anexar arquivos por 1 hora. */
+  token_anexo?: string | null;
 }
 
 export interface CriarUsuarioPayload {
@@ -82,6 +86,7 @@ export interface CriarOcorrenciaPayload {
   anonimo?: boolean;
   descricao_resumida?: string;
   horario_ocorrencia?: string | null;
+  gravidade?: string | null;
 }
 
 export interface DadosExtraidosIA {
@@ -304,7 +309,8 @@ export async function listarEvidencias(
  */
 export async function enviarEvidencia(
   ocorrenciaId: string,
-  ev: EvidenciaUpload
+  ev: EvidenciaUpload,
+  tokenAnexo?: string | null
 ): Promise<void> {
   const form = new FormData();
 
@@ -326,6 +332,7 @@ export async function enviarEvidencia(
   }
 
   form.append("tipo_midia", ev.tipoMidia);
+  if (tokenAnexo) form.append("token_anexo", tokenAnexo);
 
   const headers: Record<string, string> = { Accept: "application/json" };
   if (authToken) headers.Authorization = `Bearer ${authToken}`;
@@ -350,4 +357,146 @@ export async function enviarEvidencia(
       response.status
     );
   }
+}
+
+// --- Painel do Administrador ---
+
+export interface OcorrenciaAdmin extends Ocorrencia {
+  anonimo: boolean;
+  autor_nome?: string | null;
+  autor_email?: string | null;
+  responsavel_nome?: string | null;
+  total_evidencias: number;
+  respondida: boolean;
+}
+
+export type TipoAtualizacao = "STATUS" | "RESPOSTA" | "NOTA_INTERNA" | "MENSAGEM";
+
+export interface Atualizacao {
+  id: string;
+  ocorrencia_id: string;
+  autor_id: string;
+  autor_nome?: string | null;
+  autor_admin: boolean;
+  tipo: TipoAtualizacao;
+  mensagem_acao: string;
+  data_atualizado: string;
+}
+
+/** Todas as denúncias do campus (exclusivo do administrador). */
+export async function adminListarOcorrencias(
+  status?: StatusOcorrencia
+): Promise<OcorrenciaAdmin[]> {
+  const qs = status ? `?status=${status}` : "";
+  return request<OcorrenciaAdmin[]>(`/admin/ocorrencias${qs}`, { method: "GET" });
+}
+
+export async function adminBuscarOcorrencia(id: string): Promise<OcorrenciaAdmin> {
+  return request<OcorrenciaAdmin>(`/admin/ocorrencias/${id}`, { method: "GET" });
+}
+
+/** Muda o status / assume o chamado. A mensagem vai para a linha do tempo. */
+export async function atualizarOcorrencia(
+  id: string,
+  payload: { status?: StatusOcorrencia; mensagem?: string; gravidade?: string }
+): Promise<Ocorrencia> {
+  return request<Ocorrencia>(`/ocorrencias/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listarAtualizacoes(id: string): Promise<Atualizacao[]> {
+  return request<Atualizacao[]>(`/ocorrencias/${id}/atualizacoes`, { method: "GET" });
+}
+
+/**
+ * Admin: tipo "RESPOSTA" (o denunciante vê) ou "NOTA_INTERNA" (só admins).
+ * Denunciante: o backend sempre grava como "MENSAGEM".
+ */
+export async function adicionarAtualizacao(
+  id: string,
+  mensagem_acao: string,
+  tipo?: "RESPOSTA" | "NOTA_INTERNA"
+): Promise<Atualizacao> {
+  return request<Atualizacao>(`/ocorrencias/${id}/atualizacoes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mensagem_acao, tipo }),
+  });
+}
+
+// --- Usuários, permissões e atividades ---
+
+export interface UsuarioAdmin {
+  id: string;
+  nome: string;
+  email?: string | null;
+  tipo_perfil: TipoPerfil;
+  cadastro_completo: boolean;
+  total_denuncias: number;
+}
+
+export interface LogAtividade {
+  id: string;
+  data: string;
+  usuario_id?: string | null;
+  usuario_nome?: string | null;
+  acao: string;
+  descricao: string;
+  ocorrencia_id?: string | null;
+}
+
+export async function adminListarUsuarios(): Promise<UsuarioAdmin[]> {
+  return request<UsuarioAdmin[]>("/admin/usuarios", { method: "GET" });
+}
+
+export async function adminAlterarPerfil(id: string, tipo_perfil: TipoPerfil): Promise<UsuarioAdmin> {
+  return request<UsuarioAdmin>(`/admin/usuarios/${id}/perfil`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tipo_perfil }),
+  });
+}
+
+export async function adminListarAtividades(limite = 300): Promise<LogAtividade[]> {
+  return request<LogAtividade[]>(`/admin/atividades?limite=${limite}`, { method: "GET" });
+}
+
+export async function adminCriarAdministrador(dados: {
+  nome: string;
+  email: string;
+  senha: string;
+}): Promise<UsuarioAdmin> {
+  return request<UsuarioAdmin>("/admin/usuarios", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+}
+
+// --- Área do denunciante ---
+
+export interface MinhaDenuncia {
+  id: string;
+  tipo_incidente: string;
+  localizacao: string;
+  descricao_resumida: string;
+  descricao: string;
+  gravidade?: string | null;
+  status: StatusOcorrencia;
+  data_criacao: string;
+  horario_ocorrencia: string;
+  data_resolucao?: string | null;
+  respondida: boolean;
+  total_respostas: number;
+  ultima_resposta?: string | null;
+  data_ultima_resposta?: string | null;
+  total_evidencias: number;
+}
+
+/** Denúncias identificadas do usuário logado (as anônimas não ficam ligadas a ele). */
+export async function listarMinhasDenuncias(): Promise<MinhaDenuncia[]> {
+  return request<MinhaDenuncia[]>("/minhas-denuncias", { method: "GET" });
 }

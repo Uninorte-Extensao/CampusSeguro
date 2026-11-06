@@ -75,13 +75,14 @@ export default function Etapa5Screen() {
         localizacao: local,
         anonimo,
         descricao_resumida: resumo.slice(0, 120),
+        gravidade,
       });
 
       // Envia os anexos escolhidos na etapa 4 (guardados no contexto)
       let falhasAnexo = 0;
       for (const anexo of anexosPendentes) {
         try {
-          await enviarEvidencia(ocorrencia.id, anexo);
+          await enviarEvidencia(ocorrencia.id, anexo, ocorrencia.token_anexo);
         } catch {
           falhasAnexo += 1;
         }

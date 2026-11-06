@@ -47,8 +47,10 @@ export default function LoginScreen() {
 
     try {
       setEntrando(true);
-      await entrar(emailOrCpf.trim(), senha);
-      router.replace("../home/home");
+      const usuario = await entrar(emailOrCpf.trim(), senha);
+      router.replace(
+        usuario?.tipo_perfil === "ADMINISTRADOR" ? "/admin" : "../home/home"
+      );
     } catch (error) {
       alerta(
         "Não foi possível entrar",

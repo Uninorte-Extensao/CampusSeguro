@@ -25,7 +25,7 @@ interface AuthContextData {
   usuario: Usuario | null;
   carregando: boolean;
   autenticado: boolean;
-  entrar: (identificador: string, senha: string) => Promise<void>;
+  entrar: (identificador: string, senha: string) => Promise<Usuario | null>;
   registrar: (payload: CriarUsuarioPayload) => Promise<Usuario>;
   sair: () => Promise<void>;
 }
@@ -103,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       await persistirSessao(resposta.access_token, usuarioLogado);
+      return usuarioLogado;
     },
     [persistirSessao]
   );

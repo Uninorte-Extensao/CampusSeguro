@@ -1,0 +1,81 @@
+# Campus Seguro — stack completa para servidor próprio.
+#
+#   1. cp .env.example .env   (e preencha as senhas)
+#   2. docker compose up -d --build
+#   3. Acesse http://SEU_SERVIDOR (ou a porta definida em WEB_PORT)
+#
+# Serviços:
+#   db    -> PostgreSQL (dados persistidos no volume "pgdata")
+#   api   -> FastAPI (não exposta direto; o nginx do "web" faz o proxy em /api)
+#   admin -> roda uma vez e cria/atualiza o administrador definido no .env
+#   web   -> app web (Expo) servido pelo nginx
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: campus_seguro
+      POSTGRES_USER: campus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    # Acesso pelo pgAdmin/DBeaver na própria máquina (127.0.0.1 = não fica
+    # exposto na rede). 5433 para não brigar com um Postgres instalado local.
+    ports:
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U campus -d campus_seguro"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: ./campus-seguro-back
+    image: campus-seguro-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://campus:${POSTGRES_PASSWORD}@db:5432/campus_seguro
+      SECRET_KEY: ${SECRET_KEY:?defina SECRET_KEY no .env}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-}
+    volumes:
+      # Anexos salvos localmente (quando o R2 não está configurado)
+      - uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  admin:
+    image: campus-seguro-api
+    restart: "no"
+    command: ["python", "criar_admin.py", "${ADMIN_NOME:?defina ADMIN_NOME no .env}", "${ADMIN_EMAIL:?defina ADMIN_EMAIL no .env}", "${ADMIN_SENHA:?defina ADMIN_SENHA no .env}"]
+    environment:
+      DATABASE_URL: postgresql://campus:${POSTGRES_PASSWORD}@db:5432/campus_seguro
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./campus-seguro-front
+      args:
+        EXPO_PUBLIC_API_URL: /api
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-80}:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  uploads:

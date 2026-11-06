@@ -14,6 +14,12 @@ class StatusOcorrencia(str, Enum):
     EM_ATENDIMENTO = "EM_ATENDIMENTO"
     RESOLVIDO = "RESOLVIDO"
 
+class TipoAtualizacao(str, Enum):
+    STATUS = "STATUS"              # mudança de etapa (visível ao denunciante)
+    RESPOSTA = "RESPOSTA"          # resposta/feedback da administração ao denunciante
+    NOTA_INTERNA = "NOTA_INTERNA"  # anotação da verificação, só administradores veem
+    MENSAGEM = "MENSAGEM"          # mensagem enviada pelo próprio denunciante
+
 class TipoMidia(str, Enum):
     FOTO = "Foto"
     VIDEO = "Vídeo"
@@ -58,7 +64,11 @@ class Ocorrencia(SQLModel, table=True):
     descricao: str
     localizacao: str
     status: StatusOcorrencia = Field(default=StatusOcorrencia.ABERTO)
-    
+    # Urgência: "Baixa" | "Média" | "Alta" | "Crítica" (vem da IA, do botão de
+    # emergência ou é classificada pelo administrador na verificação)
+    gravidade: Optional[str] = None
+    data_resolucao: Optional[datetime] = None
+
     # ALTERADO: datetime.now(timezone.utc) para aceitar timezone
     data_criacao: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
@@ -81,7 +91,8 @@ class AtualizacaoOcorrencia(SQLModel, table=True):
     ocorrencia_id: UUID = Field(foreign_key="ocorrencia.id")
     autor_id: UUID = Field(foreign_key="usuario.id")
     mensagem_acao: str
-    
+    tipo: str = Field(default=TipoAtualizacao.STATUS.value)
+
     # ALTERADO: datetime.now(timezone.utc) para aceitar timezone
     data_atualizado: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -96,3 +107,20 @@ class Evidencia(SQLModel, table=True):
 
     # Relacionamento
     ocorrencia: Ocorrencia = Relationship(back_populates="evidencias")
+
+
+class LogAtividade(SQLModel, table=True):
+    """Registro de atividades (auditoria) do sistema.
+
+    IMPORTANTE: denúncias anônimas são registradas SEM o autor, para o log
+    nunca revelar quem denunciou.
+    """
+    __tablename__ = "log_atividade"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    data: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), index=True)
+    usuario_id: Optional[UUID] = Field(default=None, foreign_key="usuario.id")
+    usuario_nome: Optional[str] = None
+    acao: str = Field(index=True)
+    descricao: str
+    ocorrencia_id: Optional[UUID] = Field(default=None, foreign_key="ocorrencia.id")

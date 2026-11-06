@@ -69,7 +69,7 @@ const CampusSeguroContext = createContext<CampusSeguroContextData | null>(null);
 // --- Mapeamento backend -> UI ---
 const STATUS_MAP: Record<StatusOcorrencia, StatusRelato> = {
   ABERTO: "ATIVO",
-  EM_ATENDIMENTO: "EM ATENDIMENTO",
+  EM_ATENDIMENTO: "EM ANÁLISE",
   RESOLVIDO: "CONCLUÍDO",
 };
 
