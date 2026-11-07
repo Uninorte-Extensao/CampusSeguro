@@ -102,11 +102,28 @@ def chamar_openrouter(modelo: str, messages: list) -> dict:
         timeout=60
     )
 
+    if response.status_code >= 400:
+        # Mostra o motivo real no log (401 chave inválida, 402 sem crédito,
+        # 404 modelo inexistente, 429 limite atingido...)
+        print(f"[ERRO] {modelo}: HTTP {response.status_code} - {response.text[:300]}", flush=True)
     response.raise_for_status()
     return response.json()
 
 
-def executar_com_fallback(messages: list, modelos: List[str]) -> dict:
+def executar_com_fallback(messages: list, modelos: List[str], tentativas: int = 2) -> dict:
+    """Tenta cada modelo em ordem. Modelos gratuitos vivem congestionados (429):
+    se todos falharem, espera um pouco e faz mais uma rodada."""
+    for rodada in range(tentativas):
+        if rodada:
+            print("[INFO] Todos falharam; nova rodada em 3s (modelos gratuitos congestionados)", flush=True)
+            time.sleep(3)
+        resp = _uma_rodada(messages, modelos)
+        if resp is not None:
+            return resp
+    raise Exception("Todos os modelos falharam")
+
+
+def _uma_rodada(messages: list, modelos: List[str]):
     for modelo in modelos:
         try:
             print(f"[INFO] Tentando: {modelo}")
@@ -120,25 +137,31 @@ def executar_com_fallback(messages: list, modelos: List[str]) -> dict:
             return resp
 
         except requests.exceptions.RequestException as e:
-            print(f"[ERRO] {modelo}: {e}")
+            print(f"[ERRO] {modelo}: {e}", flush=True)
             continue
 
-    raise Exception("Todos os modelos falharam")
+    return None
 
 
 def fazer_request_via_open_router(messages: list):
+    # Permite trocar a lista sem novo deploy: OPENROUTER_MODELOS=modelo1,modelo2
+    personalizados = [m.strip() for m in (os.getenv("OPENROUTER_MODELOS") or "").split(",") if m.strip()]
+    if personalizados:
+        return executar_com_fallback(messages, personalizados)
+
+    # Lista conferida no catálogo do OpenRouter em 06/11/2026.
+    # Modelos ":free" mudam de nome/saem do ar com frequência; se voltar a
+    # falhar tudo, confira em https://openrouter.ai/models?q=free e ajuste
+    # aqui ou via OPENROUTER_MODELOS no .env (sem novo deploy).
     modelos = [
-        "google/gemma-4-26b-a4b-it:free",
+        # Somente modelos gratuitos (sem custo). Ordem = preferência.
         "google/gemma-4-31b-it:free",
-        "qwen/qwen3-next-80b-a3b-instruct:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "nousresearch/hermes-3-llama-3.1-405b:free",
-        "poolside/laguna-m.1:free",
-        "nvidia/nemotron-3-super-120b-a12b:free",
-        "openai/gpt-oss-20b:free",
-        "nousresearch/hermes-3-llama-3.1-405b:free",
-        "openai/gpt-oss-120b:free",
-        "minimax/minimax-m2.5:free"
+        "google/gemma-4-26b-a4b-it:free",
+        "nvidia/nemotron-3.5-lightning:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "nvidia/nemotron-3.5-super-vl:free",
+        "dots-studio/dots-3-note-preview:free",
+        "xingchen-agi/xing4.0-29b-a4b:free",
     ]
 
     return executar_com_fallback(messages, modelos)
