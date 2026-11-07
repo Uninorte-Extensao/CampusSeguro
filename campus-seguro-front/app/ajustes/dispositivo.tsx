@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
+import { AppState, Platform } from "react-native";
 import {
     ConfigScreen,
     FeedbackModal,
@@ -7,94 +9,100 @@ import {
     ToggleRow,
     WarningCard,
 } from "../../components/configuracoes/ConfigTelaBase";
+import {
+    EstadoPermissao,
+    estadoPermissao,
+    garantirPermissao,
+    orientarAjustes,
+} from "../../utils/permissoes";
 
-type Permissao = "camera" | "microfone" | "sensores";
+type Recurso = "microfone" | "camera";
+
+const LEGENDA: Record<EstadoPermissao, string> = {
+  concedida: "Permitido",
+  pendente: "Toque para permitir",
+  negada: "Bloqueado — toque para ver como liberar",
+  indisponivel: "Indisponível sem conexão segura (https)",
+};
 
 export default function DispositivoScreen() {
-  const [camera, setCamera] = useState(true);
-  const [microfone, setMicrofone] = useState(false);
+  const [estado, setEstado] = useState<Record<Recurso, EstadoPermissao>>({
+    microfone: "pendente",
+    camera: "pendente",
+  });
   const [sensores, setSensores] = useState(true);
+  const [avisoSensores, setAvisoSensores] = useState(false);
 
-  const [popupPermissao, setPopupPermissao] = useState<Permissao | null>(null);
+  // Mostra o estado REAL das permissões do aparelho (e atualiza ao voltar dos Ajustes)
+  const atualizar = useCallback(async () => {
+    const [microfone, camera] = await Promise.all([estadoPermissao("microfone"), estadoPermissao("camera")]);
+    setEstado({ microfone, camera });
+  }, []);
 
-  function alterarCamera(valor: boolean) {
-    setCamera(valor);
+  useFocusEffect(
+    useCallback(() => {
+      atualizar();
+      const sub = AppState.addEventListener("change", (s) => s === "active" && atualizar());
+      return () => sub.remove();
+    }, [atualizar])
+  );
 
-    if (!valor) {
-      setPopupPermissao("camera");
+  async function alternar(recurso: Recurso, ligar: boolean) {
+    if (ligar) {
+      await garantirPermissao(recurso);
+    } else {
+      // O app não pode revogar uma permissão: isso é feito nos Ajustes do sistema.
+      orientarAjustes(recurso);
     }
-  }
-
-  function alterarMicrofone(valor: boolean) {
-    setMicrofone(valor);
-
-    if (!valor) {
-      setPopupPermissao("microfone");
-    }
-  }
-
-  function alterarSensores(valor: boolean) {
-    setSensores(valor);
-
-    if (!valor) {
-      setPopupPermissao("sensores");
-    }
-  }
-
-  function getMensagemPopup() {
-    if (popupPermissao === "camera") {
-      return "A câmera foi desativada. Algumas funcionalidades de envio de evidências podem não funcionar.";
-    }
-
-    if (popupPermissao === "microfone") {
-      return "O microfone foi desativado. Recursos que dependem de áudio podem ficar indisponíveis.";
-    }
-
-    return "Os sensores foram desativados. Algumas funções automáticas do aplicativo podem ser limitadas.";
+    atualizar();
   }
 
   return (
-    <ConfigScreen
-      title="Dispositivo"
-      subtitle="Gerencie permissões de hardware do app."
-    >
+    <ConfigScreen title="Dispositivo" subtitle="Gerencie permissões de hardware do app.">
       <SettingsGroup>
         <ToggleRow
           icon="camera"
           title="Câmera"
-          value={camera}
-          onValueChange={alterarCamera}
+          subtitle={LEGENDA[estado.camera]}
+          value={estado.camera === "concedida"}
+          onValueChange={(v) => alternar("camera", v)}
         />
 
         <ToggleRow
           icon="mic"
           title="Microfone"
-          value={microfone}
-          onValueChange={alterarMicrofone}
+          subtitle={LEGENDA[estado.microfone]}
+          value={estado.microfone === "concedida"}
+          onValueChange={(v) => alternar("microfone", v)}
         />
 
         <ToggleRow
           icon="radio"
           title="Sensores"
           value={sensores}
-          onValueChange={alterarSensores}
+          onValueChange={(v) => {
+            setSensores(v);
+            if (!v) setAvisoSensores(true);
+          }}
           showDivider={false}
         />
       </SettingsGroup>
 
       <InfoText>
-        Ative apenas os recursos necessários para o funcionamento do app.
+        {Platform.OS === "web"
+          ? "As permissões ficam guardadas no navegador. Para revogar, use as configurações do site no navegador."
+          : "Para revogar uma permissão, use os Ajustes do aparelho. O app abre a tela certa para você."}
       </InfoText>
 
-      <WarningCard text="Se todas as permissões forem desativadas, alguns recursos podem não funcionar corretamente." />
+      <WarningCard text="Sem o microfone não é possível gravar relatos por áudio; sem a câmera, não dá para fotografar evidências." />
 
       <FeedbackModal
-        visible={popupPermissao !== null}
+        visible={avisoSensores}
         variant="warning"
         title="Permissão desativada"
-        message={getMensagemPopup()}
+        message="Os sensores foram desativados. Algumas funções automáticas do aplicativo podem ser limitadas."
         primaryLabel="Entendi"
-        onPrimaryPress={() => setPopupPermissao(null)}
+        onPrimaryPress={() => setAvisoSensores(false)}
       />
     </ConfigScreen>
   );

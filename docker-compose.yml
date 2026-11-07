@@ -3,12 +3,14 @@
 #   1. cp .env.example .env   (e preencha as senhas)
 #   2. docker compose up -d --build
 #   3. Acesse http://SEU_SERVIDOR (ou a porta definida em WEB_PORT)
+#   4. HTTPS: defina DOMINIO no .env e rode  docker compose --profile https up -d
 #
 # Serviços:
 #   db    -> PostgreSQL (dados persistidos no volume "pgdata")
 #   api   -> FastAPI (não exposta direto; o nginx do "web" faz o proxy em /api)
 #   admin -> roda uma vez e cria/atualiza o administrador definido no .env
 #   web   -> app web (Expo) servido pelo nginx
+#   caddy -> (perfil "https") certificado Let's Encrypt automático na porta 443
 
 services:
   db:
@@ -76,6 +78,26 @@ services:
     depends_on:
       - api
 
+  # HTTPS (opcional): suba com  docker compose --profile https up -d
+  # Precisa de DOMINIO no .env e da porta 443 livre no servidor.
+  caddy:
+    image: caddy:2.8-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMINIO: ${DOMINIO:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
 volumes:
   pgdata:
   uploads:
+  caddy_data:
+  caddy_config:

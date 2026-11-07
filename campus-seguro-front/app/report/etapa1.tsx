@@ -1,6 +1,5 @@
 import { Feather } from "@expo/vector-icons";
 import {
-  AudioModule,
   RecordingPresets,
   setAudioModeAsync,
   useAudioRecorder,
@@ -24,6 +23,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { alerta } from "../../utils/alerta";
+import { encerrarModoGravacao, estadoPermissao, garantirPermissao } from "../../utils/permissoes";
 
 export default function Etapa1Screen() {
   const router = useRouter();
@@ -47,81 +47,18 @@ export default function Etapa1Screen() {
   const podeAnalisarRelato =
     (relatoPreenchido || audioGravado) && !gravando && !carregandoAudio;
 
+  // Só LÊ o estado ao abrir (sem pedir): o pedido sai no toque do microfone,
+  // que é quando o iOS/Android e o navegador aceitam mostrar a permissão.
   useEffect(() => {
-    configurarAudio();
+    estadoPermissao("microfone").then((e) => setTemPermissaoMicrofone(e === "concedida"));
   }, []);
-
-  async function configurarAudio() {
-    try {
-      const permissao = await AudioModule.requestRecordingPermissionsAsync();
-
-      setTemPermissaoMicrofone(permissao.granted);
-
-      if (!permissao.granted) {
-        alerta(
-          "Permissão necessária",
-          "Para gravar um relato por áudio, permita o acesso ao microfone."
-        );
-
-        return;
-      }
-
-      await setAudioModeAsync({
-        playsInSilentMode: true,
-        allowsRecording: true,
-      });
-    } catch (error) {
-      console.log("Erro ao configurar áudio:", error);
-
-      alerta(
-        "Erro no áudio",
-        "Não foi possível preparar o microfone para gravação."
-      );
-    }
-  }
-
-  async function solicitarPermissaoMicrofone() {
-    try {
-      const permissao = await AudioModule.requestRecordingPermissionsAsync();
-
-      setTemPermissaoMicrofone(permissao.granted);
-
-      if (!permissao.granted) {
-        alerta(
-          "Microfone bloqueado",
-          "Você precisa permitir o uso do microfone para gravar áudio."
-        );
-
-        return false;
-      }
-
-      await setAudioModeAsync({
-        playsInSilentMode: true,
-        allowsRecording: true,
-      });
-
-      return true;
-    } catch (error) {
-      console.log("Erro ao solicitar permissão:", error);
-
-      alerta(
-        "Erro no microfone",
-        "Não foi possível solicitar permissão para usar o microfone."
-      );
-
-      return false;
-    }
-  }
 
   async function iniciarGravacao() {
     try {
       if (gravando || carregandoAudio) return;
 
-      let podeUsarMicrofone = temPermissaoMicrofone;
-
-      if (!podeUsarMicrofone) {
-        podeUsarMicrofone = await solicitarPermissaoMicrofone();
-      }
+      const podeUsarMicrofone = temPermissaoMicrofone || (await garantirPermissao("microfone"));
+      setTemPermissaoMicrofone(podeUsarMicrofone);
 
       if (!podeUsarMicrofone) return;
 
@@ -154,6 +91,7 @@ export default function Etapa1Screen() {
       setCarregandoAudio(true);
 
       await audioRecorder.stop();
+      await encerrarModoGravacao();
 
       const uri = audioRecorder.uri;
 

@@ -35,5 +35,25 @@ if (!html.includes("apple-mobile-web-app-capable")) {
 // Idioma correto
 html = html.replace('<html lang="en">', '<html lang="pt-BR">');
 
+// Safe area (iPhone com entalhe / Android com barra de gestos):
+// viewport-fit=cover deixa o app desenhar atrás da barra de status e o
+// react-native-safe-area-context usa env(safe-area-inset-*) para os recuos.
+// Sem isso, a faixa da barra de status ficava BRANCA no modo tela cheia.
+html = html.replace(
+  /<meta name="viewport"[^>]*>/,
+  '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />'
+);
+if (!html.includes('id="campus-fundo"')) {
+  html = html.replace(
+    "</head>",
+    `    <meta name="color-scheme" content="dark" />
+    <style id="campus-fundo">
+      html, body, #root { background-color: #0B1020; }
+      body { overscroll-behavior-y: none; }
+    </style>
+  </head>`
+  );
+}
+
 fs.writeFileSync(arquivo, html);
 console.log("inject-pwa: meta tags de PWA injetadas em dist/index.html ✔");

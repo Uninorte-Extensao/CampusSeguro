@@ -1,0 +1,23 @@
+# HTTPS do Campus Seguro (Caddy emite e renova o certificado Let's Encrypt sozinho).
+#
+# DOMINIO vem do .env. Sem domínio próprio, use o IP com sslip.io:
+#   DOMINIO=13-140-47-133.sslip.io
+#
+# Só a porta 443 é usada (a 80 do servidor pode estar ocupada por outro app):
+# o certificado é validado pelo desafio TLS-ALPN, que roda na própria 443.
+
+{$DOMINIO} {
+	encode gzip
+
+	# Segurança básica
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Libera microfone e câmera para o próprio site (gravação de relato e fotos)
+		Permissions-Policy "microphone=(self), camera=(self)"
+	}
+
+	# App web + API (o nginx do container "web" já repassa /api para a API)
+	reverse_proxy web:80
+}
