@@ -29,7 +29,7 @@ export default function ConfiguracoesScreen() {
         </View>
 
         <Painel titulo="Políticas de acesso" icone="lock" style={{ flex: 1.4 }}>
-          <Politica icone="clock" titulo="Expiração de sessão" texto="O login expira após 24 horas; depois é preciso entrar de novo." />
+          <Politica icone="clock" titulo="Expiração de sessão" texto="O login vale por 30 dias; depois é preciso entrar de novo." />
           <Politica icone="activity" titulo="Registro de atividades" texto="Logins, tentativas recusadas, mudanças de status, respostas e permissões ficam registrados." />
           <Politica icone="eye-off" titulo="Anonimato preservado" texto="Denúncias anônimas não guardam o autor, nem no registro de atividades." />
           <Politica icone="message-circle" titulo="Feedback só para identificados" texto="Somente denunciantes identificados recebem resposta individual sobre andamento e resolução." />

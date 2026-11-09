@@ -113,7 +113,9 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY não foi definida no arquivo .env")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 24 horas
+# Validade do login (padrão 30 dias). Ajuste com TOKEN_VALIDADE_DIAS no .env
+TOKEN_VALIDADE_DIAS = int(os.getenv("TOKEN_VALIDADE_DIAS") or 30)
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * TOKEN_VALIDADE_DIAS
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # --- FUNÇÕES DE SEGURANÇA (JWT E RBAC) ---

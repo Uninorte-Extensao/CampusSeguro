@@ -97,9 +97,14 @@ def chamar_openrouter(modelo: str, messages: list) -> dict:
         json={
             "model": modelo,
             "messages": messages,
-            "temperature": 0
+            "temperature": 0,
+            # Sem "raciocínio" interno: a resposta sai em 1-4s em vez de 30-60s
+            # (medido nos modelos gratuitos em 09/11/2026)
+            "reasoning": {"enabled": False},
+            "max_tokens": 700,
         },
-        timeout=60
+        # Espera curta: se um modelo gratuito travar, passa logo para o próximo
+        timeout=int(os.getenv("OPENROUTER_TIMEOUT") or 25)
     )
 
     if response.status_code >= 400:
@@ -155,12 +160,12 @@ def fazer_request_via_open_router(messages: list):
     # aqui ou via OPENROUTER_MODELOS no .env (sem novo deploy).
     modelos = [
         # Somente modelos gratuitos (sem custo). Ordem = preferência.
-        "google/gemma-4-31b-it:free",
-        "google/gemma-4-26b-a4b-it:free",
+        # Ordem pela velocidade medida (sem raciocínio): ~1-4s cada
+        "nvidia/nemotron-3.5-super-vl:free",
         "nvidia/nemotron-3.5-lightning:free",
         "nvidia/nemotron-3-ultra-550b-a55b:free",
-        "nvidia/nemotron-3.5-super-vl:free",
-        "dots-studio/dots-3-note-preview:free",
+        "google/gemma-4-31b-it:free",
+        "google/gemma-4-26b-a4b-it:free",
         "xingchen-agi/xing4.0-29b-a4b:free",
     ]
 

@@ -349,7 +349,7 @@ export default function DashboardScreen() {
                 <LinhaSeguranca
                   icone="clock"
                   titulo="Expiração de sessão"
-                  valor="Login expira após 24 horas"
+                  valor="Login vale por 30 dias"
                   status="Ativa"
                   ok
                 />
